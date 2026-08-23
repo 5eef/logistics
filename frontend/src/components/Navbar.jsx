@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
-import { Bell, LogOut, User, Package, ChevronDown, Menu, X, MapPin } from "lucide-react";
+import { subscribeToUserNotifications } from "../lib/realtime";
+import { Bell, LogOut, User, Package, ChevronDown, Menu, X } from "lucide-react";
 
 export default function Navbar() {
   const [, navigate] = useLocation();
@@ -14,14 +15,31 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+
+    const refreshNotifications = () => {
       api.auth.notifications().then(setNotifications).catch(() => {});
-      const interval = setInterval(() => {
-        api.auth.notifications().then(setNotifications).catch(() => {});
-      }, 15000);
-      return () => clearInterval(interval);
+    };
+
+    refreshNotifications();
+    const echo = subscribeToUserNotifications({
+      userId: user.id,
+      token: localStorage.getItem("logistics_token"),
+      onNotification: (notification) => {
+        setNotifications((current) => [
+          notification,
+          ...current.filter((item) => item.id !== notification.id),
+        ].slice(0, 50));
+      },
+    });
+
+    if (echo) {
+      return () => echo.disconnect();
     }
-  }, [user]);
+
+    const interval = window.setInterval(refreshNotifications, 30000);
+    return () => window.clearInterval(interval);
+  }, [user?.id]);
 
   const unread = notifications.filter((n) => !n.isRead).length;
 
@@ -69,6 +87,12 @@ export default function Navbar() {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
   };
 
+  const openProfile = () => {
+    navigate("/profil");
+    setShowMenu(false);
+    setMobileOpen(false);
+  };
+
   return (
     <nav className="bg-[#1a2744] text-white shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
@@ -98,6 +122,7 @@ export default function Navbar() {
                   <button
                     onClick={() => { setShowNotifs(!showNotifs); setShowMenu(false); }}
                     className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
+                    aria-label="Ouvrir les notifications"
                   >
                     <Bell size={20} />
                     {unread > 0 && (
@@ -135,8 +160,8 @@ export default function Navbar() {
                     onClick={() => { setShowMenu(!showMenu); setShowNotifs(false); }}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
                   >
-                    <div className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center text-sm font-bold">
-                      {user.name[0]?.toUpperCase()}
+                    <div className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden">
+                      {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : user.name[0]?.toUpperCase()}
                     </div>
                     <span className="text-sm max-w-24 truncate">{user.name}</span>
                     <ChevronDown size={14} />
@@ -148,10 +173,16 @@ export default function Navbar() {
                         <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${roleColor()}`}>{roleLabel()}</span>
                       </div>
                       <button
+                        onClick={openProfile}
+                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                      >
+                        <User size={15} /> Mon profil
+                      </button>
+                      <button
                         onClick={() => { navigate(dashboardPath()); setShowMenu(false); }}
                         className="flex items-center gap-2 w-full px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
                       >
-                        <User size={15} /> Tableau de Bord
+                        <Package size={15} /> Tableau de Bord
                       </button>
                       <button
                         onClick={handleLogout}
@@ -198,6 +229,9 @@ export default function Navbar() {
               <>
                 <button onClick={() => { navigate(dashboardPath()); setMobileOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white rounded-lg hover:bg-white/10">
                   Tableau de Bord
+                </button>
+                <button onClick={openProfile} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white rounded-lg hover:bg-white/10">
+                  Mon profil
                 </button>
                 <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-sm text-red-400 rounded-lg hover:bg-white/10">
                   Déconnexion

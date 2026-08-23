@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../lib/api";
 import Navbar from "../../components/Navbar";
-import { Package, MapPin, ArrowRight, RefreshCw, DollarSign, AlertTriangle } from "lucide-react";
+import { Package, MapPin, ArrowRight, RefreshCw, DollarSign, AlertTriangle, Key } from "lucide-react";
 
 const CITIES = [
   "Casablanca", "Rabat", "Marrakech", "Fès", "Tanger", "Agadir",
@@ -22,6 +22,9 @@ export default function VoyageurDashboard() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [pinModal, setPinModal] = useState(null);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState("");
 
   useEffect(() => {
     if (!user) { navigate("/auth"); return; }
@@ -58,6 +61,25 @@ export default function VoyageurDashboard() {
     } catch (e) { alert(e.message); }
     setUpdating(false);
   };
+
+  const validatePin = async () => {
+    if (!pinModal || pin.length !== 4) return;
+    setUpdating(true);
+    setPinError("");
+    try {
+      await api.colis.validatePin(pinModal.id, pin);
+      setPinModal(null);
+      setPin("");
+      const mine = await api.colis.list();
+      setMyDeliveries(mine);
+    } catch (e) {
+      setPinError(e.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const isVerified = user?.isVerified && user?.verificationStatus === "approved";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -128,14 +150,14 @@ export default function VoyageurDashboard() {
                         </div>
                       </div>
                       <div className="text-sm text-gray-500 mb-3">
-                        {c.weight} kg • {c.description || "Colis"}
+                        {c.weight} kg • {c.description || "Colis"} • Destinataire: {c.recipientName}
                       </div>
                       <button
                         onClick={() => acceptColis(c)}
-                        disabled={updating}
+                        disabled={updating || !isVerified}
                         className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors"
                       >
-                        Prendre ce Colis
+                        {isVerified ? "Prendre ce Colis" : "Compte non vérifié"}
                       </button>
                     </div>
                   </div>
@@ -161,10 +183,11 @@ export default function VoyageurDashboard() {
                     <span>{c.fromCity} → {c.toCity} • {c.weight}kg</span>
                     <span className="font-bold text-teal-600">{c.price} MAD</span>
                   </div>
-                  {c.status !== "delivered" && (
+                  {c.status !== "delivered" && c.status !== "failed" && (
                     <div className="flex gap-2 mt-3">
-                      <button onClick={() => updateStatus(c.id, "in_transit", "En route avec le voyageur")} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">En Transit</button>
-                      <button onClick={() => updateStatus(c.id, "delivered", "Livré par le voyageur")} className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium">Livré</button>
+                      {c.status === "picked_up" && <button onClick={() => updateStatus(c.id, "in_transit", "En route avec le voyageur")} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">En transit</button>}
+                      {c.status === "in_transit" && <button onClick={() => updateStatus(c.id, "out_for_delivery", "En cours de livraison finale")} className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-medium">En livraison</button>}
+                      {c.status === "out_for_delivery" && <button onClick={() => { setPinModal(c); setPin(""); setPinError(""); }} className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium">Valider PIN</button>}
                     </div>
                   )}
                 </div>
@@ -173,6 +196,20 @@ export default function VoyageurDashboard() {
           </div>
         )}
       </div>
+      {pinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setPinModal(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <h3 className="mb-2 text-center font-bold text-gray-800">Confirmer la livraison</h3>
+            <p className="mb-4 text-center text-sm text-gray-500">Saisissez le code PIN communiqué par le destinataire.</p>
+            <input value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" maxLength={4} className="mb-2 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-center font-mono text-xl tracking-[0.5em] focus:border-teal-500 focus:outline-none" />
+            {pinError && <p className="mb-3 text-center text-sm text-red-600">{pinError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setPinModal(null)} className="flex-1 rounded-xl border-2 border-gray-200 py-2.5 text-sm">Annuler</button>
+              <button onClick={validatePin} disabled={updating || pin.length !== 4} className="flex-1 rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Confirmer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

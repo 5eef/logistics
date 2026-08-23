@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { api } from "../lib/api";
-import { Search, Package, Truck, CheckCircle, Clock, MapPin, ArrowRight, Star } from "lucide-react";
+import { Search, Package, CheckCircle, MapPin, ArrowRight } from "lucide-react";
 
 const statusSteps = ["created", "pending", "picked_up", "in_transit", "out_for_delivery", "delivered"];
 const statusLabels = {
@@ -29,7 +29,6 @@ const statusColors = {
 function TrackingResult({ colis }) {
   if (!colis) return null;
   const stepIndex = statusSteps.indexOf(colis.status);
-  const carrier = colis.livreur || colis.voyageur;
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mt-6">
@@ -83,27 +82,10 @@ function TrackingResult({ colis }) {
           </div>
         </div>
 
-        {carrier && (
-          <div className="bg-green-50 border border-green-100 rounded-xl p-4 flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
-              {carrier.name[0]}
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">Livreur assigné</div>
-              <div className="font-semibold">{carrier.name}</div>
-              {carrier.rating > 0 && (
-                <div className="flex items-center gap-1 text-xs text-yellow-600">
-                  <Star size={12} fill="currentColor" /> {carrier.rating}/5
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         <div className="mt-5">
           <div className="text-sm font-semibold text-gray-700 mb-3">Historique</div>
           <div className="space-y-2 max-h-48 overflow-y-auto">
-            {[...(colis.statusHistory || [])].reverse().map((h, i) => (
+            {[...colis.statusHistory].reverse().map((h, i) => (
               <div key={i} className="flex gap-3 text-sm">
                 <div className="flex-shrink-0 mt-0.5">
                   <div className={`w-2.5 h-2.5 rounded-full mt-1 ${statusColors[h.status] || "bg-gray-400"}`} />

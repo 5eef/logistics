@@ -7,7 +7,7 @@ import Navbar from "../../components/Navbar";
 import CreateShipment from "./CreateShipment";
 import {
   Package, Plus, TrendingUp, Clock, CheckCircle, XCircle,
-  Eye, MessageSquare, RefreshCw, QrCode, DollarSign
+  Eye, Star, MessageSquare, RefreshCw, QrCode, DollarSign
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -32,6 +32,8 @@ export default function ExpediteurDashboard() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [ratingModal, setRatingModal] = useState(null);
+  const [rating, setRating] = useState({ score: 5, comment: "" });
   const [ticketForm, setTicketForm] = useState({ subject: "", message: "", priority: "medium" });
 
   useEffect(() => {
@@ -52,6 +54,19 @@ export default function ExpediteurDashboard() {
       setTickets(t);
     } catch (e) { console.error(e); }
     setLoading(false);
+  };
+
+  const submitRating = async () => {
+    if (!ratingModal) return;
+    try {
+      await api.colis.rate(ratingModal.id, {
+        toUserId: ratingModal.livreurId,
+        score: rating.score,
+        comment: rating.comment,
+      });
+      setRatingModal(null);
+      loadData();
+    } catch (e) { alert(e.message); }
   };
 
   const submitTicket = async (e) => {
@@ -179,6 +194,11 @@ export default function ExpediteurDashboard() {
                           <button onClick={() => setSelected(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="Détails">
                             <Eye size={15} />
                           </button>
+                          {c.status === "delivered" && c.livreurId && (
+                            <button onClick={() => setRatingModal(c)} className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-lg" title="Noter">
+                              <Star size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -296,6 +316,9 @@ export default function ExpediteurDashboard() {
                 <span className="text-sm text-gray-500">Poids / Prix</span>
                 <span className="text-sm font-medium">{selected.weight} kg / {selected.price} MAD</span>
               </div>
+              <div className="rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-800">
+                Le code PIN n’est affiché qu’une seule fois à la création de l’expédition.
+              </div>
               <div>
                 <div className="text-sm text-gray-500 mb-2">Historique</div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -315,6 +338,29 @@ export default function ExpediteurDashboard() {
         </div>
       )}
 
+      {ratingModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setRatingModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-gray-800 mb-4">Noter le Livreur</h3>
+            <div className="flex justify-center gap-2 mb-4">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button key={s} onClick={() => setRating((p) => ({ ...p, score: s }))} className={`text-3xl ${s <= rating.score ? "text-yellow-400" : "text-gray-200"}`}>★</button>
+              ))}
+            </div>
+            <textarea
+              value={rating.comment}
+              onChange={(e) => setRating((p) => ({ ...p, comment: e.target.value }))}
+              placeholder="Commentaire (optionnel)"
+              rows={3}
+              className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:border-blue-500 focus:outline-none mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setRatingModal(null)} className="flex-1 py-2.5 border-2 border-gray-200 rounded-xl text-sm font-medium">Annuler</button>
+              <button onClick={submitRating} className="flex-1 py-2.5 bg-yellow-400 hover:bg-yellow-500 rounded-xl text-sm font-bold transition-colors">Envoyer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

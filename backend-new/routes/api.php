@@ -1,11 +1,12 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ColisController;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\TicketController;
 use App\Http\Controllers\MiscController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\TicketController;
+use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
@@ -15,14 +16,20 @@ Route::get('/colis/track/{trackingId}', [ColisController::class, 'track'])
     ->middleware('throttle:60,1');
 Route::get('/misc/cities', [MiscController::class, 'cities']);
 Route::get('/misc/livreurs/online', [MiscController::class, 'livreursOnline'])->middleware('throttle:60,1');
+Route::get('/profile/avatar/{filename}', [ProfileController::class, 'avatar'])
+    ->where('filename', '[A-Za-z0-9._-]+');
 
 // Protected routes
-Route::middleware(['auth:sanctum', 'active'])->group(function () {
+Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::patch('/auth/me', [AuthController::class, 'updateMe']);
     Route::get('/auth/notifications', [AuthController::class, 'notifications']);
     Route::patch('/auth/notifications/{id}/read', [AuthController::class, 'readNotification']);
+
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::patch('/profile', [ProfileController::class, 'update']);
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:10,1');
 
     Route::get('/colis/stats', [ColisController::class, 'stats']);
     Route::get('/colis', [ColisController::class, 'index']);

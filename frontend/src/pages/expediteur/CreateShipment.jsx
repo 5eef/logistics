@@ -69,7 +69,7 @@ export default function CreateShipment({ onSuccess }) {
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Code PIN destinataire</span>
-            <span className="font-mono font-bold text-orange-600 bg-orange-50 px-2 rounded">{created.pinCode}</span>
+            <span className="font-mono font-bold text-orange-600 bg-orange-50 px-2 rounded">{created.recipientPin}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Destination</span>
@@ -86,7 +86,7 @@ export default function CreateShipment({ onSuccess }) {
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 mb-6">
-          Partagez le code PIN <strong>{created.pinCode}</strong> avec le destinataire. Il sera requis pour confirmer la livraison.
+          Partagez le code PIN <strong>{created.recipientPin}</strong> avec le destinataire. Il sera requis pour confirmer la livraison.
         </div>
 
         <div className="flex gap-3">

@@ -120,16 +120,6 @@ export default function Auth() {
               </div>
             )}
 
-            {mode === "login" && import.meta.env.DEV && (
-              <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
-                <strong>Comptes de test:</strong><br />
-                Admin: admin@logistics.ma / admin123<br />
-                Expéditeur: expediteur@test.ma / test123<br />
-                Livreur: livreur@test.ma / test123<br />
-                Destinataire: destinataire@test.ma / test123
-              </div>
-            )}
-
             {error && (
               <div className="flex items-center gap-2 mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
                 <AlertCircle size={16} /> {error}
@@ -191,13 +181,15 @@ export default function Auth() {
                 <div className="relative">
                   <input
                     type={showPass ? "text" : "password"}
-                    value={form.password}
-                    onChange={(e) => set("password", e.target.value)}
-                    required
-                    minLength={mode === "register" ? 8 : undefined}
-                    placeholder="••••••••"
+                      value={form.password}
+                      onChange={(e) => set("password", e.target.value)}
+                      required
+                      minLength={10}
+                      autoComplete={mode === "login" ? "current-password" : "new-password"}
+                      placeholder="••••••••"
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm focus:border-blue-500 focus:outline-none"
                   />
+                  {mode === "register" && <p className="mt-1 text-xs text-gray-400">10 caractères minimum, avec lettres et chiffres.</p>}
                   <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-3 text-gray-400">
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -239,7 +231,6 @@ export default function Auth() {
                         <select
                           value={form.vehicleType}
                           onChange={(e) => set("vehicleType", e.target.value)}
-                          required
                           className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
                         >
                           {["Moto", "Voiture", "Camionnette", "Vélo"].map((v) => <option key={v}>{v}</option>)}
@@ -251,7 +242,6 @@ export default function Auth() {
                           type="text"
                           value={form.vehiclePlate}
                           onChange={(e) => set("vehiclePlate", e.target.value)}
-                          required
                           placeholder="12345-A-1"
                           className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
                         />

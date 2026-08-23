@@ -22,7 +22,7 @@ const statusColors = {
 
 const steps = ["created", "pending", "picked_up", "in_transit", "out_for_delivery", "delivered"];
 
-export default function DestinataireDashboard() {
+export default function DestinataireeDashboard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [colis, setColis] = useState([]);
@@ -61,7 +61,7 @@ export default function DestinataireDashboard() {
     if (!ratingModal) return;
     try {
       await api.colis.rate(ratingModal.id, {
-        toUserId: ratingModal.livreurId || ratingModal.voyageurId,
+        toUserId: ratingModal.livreurId,
         score: rating.score,
         comment: rating.comment,
       });
@@ -165,7 +165,7 @@ export default function DestinataireDashboard() {
                   {c.status === "out_for_delivery" && (
                     <div className="px-5 pb-4">
                       <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-800 flex items-center gap-2">
-                        <Key size={16} /> Donnez au transporteur le code PIN reçu lors de l'expédition.
+                        <Key size={16} /> Communiquez au livreur le code PIN reçu de l’expéditeur pour confirmer la livraison.
                       </div>
                     </div>
                   )}
@@ -190,7 +190,7 @@ export default function DestinataireDashboard() {
                       <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
                         <CheckCircle size={12} /> Livré
                       </span>
-                      {(c.livreurId || c.voyageurId) && (
+                      {c.livreurId && (
                         <button
                           onClick={() => setRatingModal(c)}
                           className="p-1.5 text-yellow-500 hover:bg-yellow-50 rounded-lg"

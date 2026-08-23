@@ -186,15 +186,18 @@ export default function LivreurDashboard() {
                         <div className="flex-1">
                           <div className="text-xs text-gray-500">De</div>
                           <div className="font-semibold text-sm">{c.fromCity}</div>
+                          <div className="text-xs text-gray-400 truncate">{c.fromAddress}</div>
                         </div>
                         <div className="text-gray-300">→</div>
                         <div className="flex-1">
                           <div className="text-xs text-gray-500">Vers</div>
                           <div className="font-semibold text-sm">{c.toCity}</div>
+                          <div className="text-xs text-gray-400 truncate">{c.toAddress}</div>
                         </div>
                       </div>
                       <div className="flex justify-between text-sm mb-3">
                         <span className="text-gray-500">{c.weight} kg • {c.description || "Colis"}</span>
+                        <span className="text-gray-500">{c.recipientName}</span>
                       </div>
                       {c.isVoyageurEligible && (
                         <div className="text-xs bg-teal-50 text-teal-700 border border-teal-200 rounded-lg px-2 py-1 mb-3">
@@ -270,7 +273,7 @@ export default function LivreurDashboard() {
                             En Livraison Finale
                           </button>
                         )}
-                        {(c.status === "in_transit" || c.status === "out_for_delivery") && (
+                        {c.status === "out_for_delivery" && (
                           <button onClick={() => { setPinModal(c); setPin(""); setPinError(""); }}
                             className="px-4 py-2 bg-green-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 hover:bg-green-600">
                             <Key size={14} /> Valider PIN

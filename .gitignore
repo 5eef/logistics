@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 backend-new/.env
 frontend/.env
 
@@ -29,5 +30,12 @@ frontend/dist/
 *.log
 .DS_Store
 Thumbs.db
+.copilot-azure/
 .vscode/
 .idea/
+frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
+
+# Outils locaux
+logistics-final/

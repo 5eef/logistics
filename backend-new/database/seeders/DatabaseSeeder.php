@@ -2,20 +2,20 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
-use App\Models\User;
 use App\Models\Colis;
+use App\Models\Notification;
 use App\Models\StatusHistory;
 use App\Models\Ticket;
-use App\Models\Notification;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        if (app()->environment('production')) {
-            throw new \RuntimeException('Le jeu de données de démonstration est interdit en production.');
+        if (app()->isProduction()) {
+            throw new \LogicException('Le seeder de démonstration ne peut pas être exécuté en production.');
         }
 
         // Users (idempotent)
@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('admin123'),
                 'role' => 'admin',
                 'city' => 'Casablanca',
+                'avatar_path' => null,
                 'rating' => 5,
                 'rating_count' => 0,
                 'is_verified' => true,
@@ -44,6 +45,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('test123'),
                 'role' => 'expediteur',
                 'city' => 'Casablanca',
+                'avatar_path' => null,
                 'rating' => 4.5,
                 'rating_count' => 12,
                 'is_verified' => true,
@@ -61,6 +63,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('test123'),
                 'role' => 'livreur',
                 'city' => 'Casablanca',
+                'avatar_path' => null,
                 'rating' => 4.8,
                 'rating_count' => 47,
                 'is_online' => true,
@@ -83,6 +86,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('test123'),
                 'role' => 'destinataire',
                 'city' => 'Casablanca',
+                'avatar_path' => null,
                 'rating' => 4.9,
                 'rating_count' => 8,
                 'is_verified' => true,
@@ -100,6 +104,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('test123'),
                 'role' => 'livreur',
                 'city' => 'Marrakech',
+                'avatar_path' => null,
                 'rating' => 4.2,
                 'rating_count' => 23,
                 'is_online' => false,
@@ -122,6 +127,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('test123'),
                 'role' => 'voyageur',
                 'city' => 'Casablanca',
+                'avatar_path' => null,
                 'rating' => 4.7,
                 'rating_count' => 5,
                 'is_verified' => false,
@@ -158,7 +164,7 @@ class DatabaseSeeder extends Seeder
         );
 
         // StatusHistory can duplicate; only insert if empty for colis
-        if (!StatusHistory::where('colis_id', $c1->id)->exists()) {
+        if (! StatusHistory::where('colis_id', $c1->id)->exists()) {
             StatusHistory::insert([
                 [
                     'colis_id' => $c1->id,
@@ -213,7 +219,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        if (!StatusHistory::where('colis_id', $c2->id)->exists()) {
+        if (! StatusHistory::where('colis_id', $c2->id)->exists()) {
             StatusHistory::insert([
                 [
                     'colis_id' => $c2->id,
@@ -261,7 +267,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        if (!StatusHistory::where('colis_id', $c3->id)->exists()) {
+        if (! StatusHistory::where('colis_id', $c3->id)->exists()) {
             StatusHistory::insert([
                 [
                     'colis_id' => $c3->id,
@@ -316,7 +322,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        if (!StatusHistory::where('colis_id', $c4->id)->exists()) {
+        if (! StatusHistory::where('colis_id', $c4->id)->exists()) {
             StatusHistory::insert([
                 [
                     'colis_id' => $c4->id,
@@ -346,7 +352,7 @@ class DatabaseSeeder extends Seeder
         );
 
         // Notifications: only insert if none exist for this colis
-        if (!Notification::where('user_id', $exp->id)->where('title', 'Colis en transit')->exists()) {
+        if (! Notification::where('user_id', $exp->id)->where('title', 'Colis en transit')->exists()) {
             Notification::insert([
                 [
                     'user_id' => $exp->id,

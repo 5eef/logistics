@@ -44,13 +44,19 @@ export function AuthProvider({ children }) {
   };
 
   const updateUser = async (data) => {
-    const updated = await api.auth.updateMe(data);
+    const updated = await api.profile.update(data);
+    setUser(updated);
+    return updated;
+  };
+
+  const refreshUser = async () => {
+    const updated = await api.profile.show();
     setUser(updated);
     return updated;
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refetch: fetchMe }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refreshUser, refetch: fetchMe }}>
       {children}
     </AuthContext.Provider>
   );

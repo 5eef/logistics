@@ -17,4 +17,17 @@ export default defineConfig({
     port: 5173,
     host: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Recharts is used only by lazy dashboard routes. Keep its D3
+          // subpackages independently cacheable instead of producing one
+          // oversized charting chunk.
+          const chartPackage = id.match(/[\\/]node_modules[\\/](d3-[^\\/]+|victory-vendor|recharts|lodash)[\\/]/)?.[1];
+          if (chartPackage) return `chart-${chartPackage}`;
+        },
+      },
+    },
+  },
 });

@@ -206,7 +206,7 @@ export default function AdminDashboard() {
                       <div className="flex justify-between"><span className="text-gray-500">CIN</span><span className="font-mono">{c.cin || "—"}</span></div>
                       {c.role === "livreur" && (
                         <>
-                          <div className="flex justify-between"><span className="text-gray-500">Permis</span><span className="font-mono">{c.licenseNumber || "—"}</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">Permis</span><span className="font-mono">{c.license || "—"}</span></div>
                           <div className="flex justify-between"><span className="text-gray-500">Véhicule</span><span>{c.vehicleType} • {c.vehiclePlate || "—"}</span></div>
                         </>
                       )}
