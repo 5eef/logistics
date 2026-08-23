@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, CheckCircle, LoaderCircle, MapPin, ShieldCheck, UserRound } from "lucide-react";
+import { Camera, CheckCircle, LoaderCircle, MapPin, Phone, ShieldCheck, UserRound } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
@@ -19,6 +19,9 @@ export default function Profile() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verifyingPhone, setVerifyingPhone] = useState(false);
+  const [phoneCodeSent, setPhoneCodeSent] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -34,7 +37,7 @@ export default function Profile() {
         name: profile.name || "", phone: profile.phone || "", city: profile.city || "",
         vehicleType: profile.vehicleType || "", vehiclePlate: profile.vehiclePlate || "",
       });
-    }).catch(() => {});
+    }).catch((requestError) => setError(requestError.message || "Impossible de charger le profil."));
   }, [user]);
 
   if (!user) return null;
@@ -68,6 +71,32 @@ export default function Profile() {
     } finally {
       setUploading(false);
       event.target.value = "";
+    }
+  };
+
+  const startPhoneVerification = async () => {
+    setVerifyingPhone(true); setError(""); setMessage("");
+    try {
+      const result = await api.auth.startPhoneVerification();
+      setPhoneCodeSent(true);
+      setMessage(result.message);
+    } catch (err) {
+      setError(err.message || "La vérification téléphonique est indisponible.");
+    } finally {
+      setVerifyingPhone(false);
+    }
+  };
+
+  const confirmPhoneVerification = async () => {
+    setVerifyingPhone(true); setError(""); setMessage("");
+    try {
+      const result = await api.auth.confirmPhoneVerification(verificationCode);
+      await refreshUser();
+      setPhoneCodeSent(false); setVerificationCode(""); setMessage(result.message);
+    } catch (err) {
+      setError(err.message || "Code incorrect ou expiré.");
+    } finally {
+      setVerifyingPhone(false);
     }
   };
 
@@ -108,10 +137,29 @@ export default function Profile() {
             <Field label="Téléphone" type="tel" value={form.phone} onChange={(value) => set("phone", value)} required />
             <Field label="Ville" value={form.city} onChange={(value) => set("city", value)} required icon={<MapPin size={15} />} />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Adresse email</label>
-              <input value={user.email} disabled className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500" />
+              <label htmlFor="profile-email" className="block text-sm font-medium text-gray-700 mb-1.5">Adresse email</label>
+              <input id="profile-email" value={user.email} disabled className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500" />
               <p className="text-xs text-gray-400 mt-1">L’email et le rôle ne peuvent pas être modifiés ici.</p>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-blue-900">
+                <Phone size={17} aria-hidden="true" />
+                <span>{user.phoneVerifiedAt ? "Téléphone vérifié" : "Téléphone non vérifié"}</span>
+              </div>
+              {!user.phoneVerifiedAt && !phoneCodeSent && (
+                <button type="button" onClick={startPhoneVerification} disabled={verifyingPhone} className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">Envoyer un code</button>
+              )}
+            </div>
+            {!user.phoneVerifiedAt && phoneCodeSent && (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <label htmlFor="phone-verification-code" className="sr-only">Code de vérification téléphone</label>
+                <input id="phone-verification-code" inputMode="numeric" autoComplete="one-time-code" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="Code reçu" className="min-w-0 flex-1 rounded-lg border border-blue-200 px-3 py-2 text-sm" />
+                <button type="button" onClick={confirmPhoneVerification} disabled={verifyingPhone || verificationCode.length < 4} className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">Confirmer</button>
+              </div>
+            )}
           </div>
 
           {isCourier && (
@@ -121,6 +169,7 @@ export default function Profile() {
                 <Field label="Type de véhicule" value={form.vehicleType} onChange={(value) => set("vehicleType", value)} />
                 <Field label="Plaque d’immatriculation" value={form.vehiclePlate} onChange={(value) => set("vehiclePlate", value)} />
               </div>
+              <p className="mt-3 text-xs text-amber-700">Toute modification du véhicule remet votre approbation en attente de contrôle administratif.</p>
             </div>
           )}
 

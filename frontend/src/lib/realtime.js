@@ -1,12 +1,13 @@
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
+import { csrfHeaders } from "./api";
 
 const apiUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 const broadcastAuthUrl = `${apiUrl.replace(/\/api\/?$/, "")}/api/broadcasting/auth`;
 
-export function subscribeToUserNotifications({ userId, token, onNotification }) {
+export function subscribeToUserNotifications({ userId, onNotification, onConnectionChange }) {
   const key = import.meta.env.VITE_REVERB_APP_KEY;
-  if (!key || !token) return null;
+  if (!key) return null;
 
   window.Pusher = Pusher;
   const echo = new Echo({
@@ -18,9 +19,16 @@ export function subscribeToUserNotifications({ userId, token, onNotification }) 
     forceTLS: (import.meta.env.VITE_REVERB_SCHEME || "https") === "https",
     enabledTransports: ["ws", "wss"],
     authEndpoint: broadcastAuthUrl,
-    auth: { headers: { Authorization: `Bearer ${token}` } },
+    withCredentials: true,
+    auth: { headers: { Accept: "application/json", ...csrfHeaders() } },
   });
 
+  const connection = echo.connector?.pusher?.connection;
+  connection?.bind("connected", () => onConnectionChange?.(true));
+  for (const event of ["disconnected", "unavailable", "failed", "error"]) {
+    connection?.bind(event, () => onConnectionChange?.(false));
+  }
   echo.private(`users.${userId}`).listen(".notification.created", onNotification);
+
   return echo;
 }

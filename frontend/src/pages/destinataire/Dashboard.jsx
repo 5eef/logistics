@@ -1,10 +1,11 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../lib/api";
 import Navbar from "../../components/Navbar";
-import { Package, Star, RefreshCw, CheckCircle, Clock, Phone, MapPin, Key } from "lucide-react";
+import Pagination from "../../components/Pagination";
+import { Package, Star, RefreshCw, CheckCircle, Key } from "lucide-react";
 
 const statusLabels = {
   created: "Créé", pending: "En attente", picked_up: "Récupéré",
@@ -27,26 +28,29 @@ export default function DestinataireeDashboard() {
   const [, navigate] = useLocation();
   const [colis, setColis] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
+  const [pageError, setPageError] = useState("");
   const [ratingModal, setRatingModal] = useState(null);
   const [rating, setRating] = useState({ score: 5, comment: "" });
   const [trackId, setTrackId] = useState("");
   const [tracked, setTracked] = useState(null);
   const [trackError, setTrackError] = useState("");
+  const [meta, setMeta] = useState(null);
+  const [stats, setStats] = useState(null);
+
+  const loadData = useCallback(async (page = 1) => {
+    setLoading(true);
+    try {
+      const [c, s] = await Promise.all([api.colis.list({ page }), api.colis.stats()]);
+      setColis(c.data); setMeta(c.meta); setStats(s);
+      setPageError("");
+    } catch (e) { setPageError(e.message); }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!user) { navigate("/auth"); return; }
     loadData();
-  }, [user]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const c = await api.colis.list();
-      setColis(c);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
+  }, [user, navigate, loadData]);
 
   const trackColis = async (e) => {
     e.preventDefault();
@@ -61,13 +65,13 @@ export default function DestinataireeDashboard() {
     if (!ratingModal) return;
     try {
       await api.colis.rate(ratingModal.id, {
-        toUserId: ratingModal.livreurId,
+        toUserId: ratingModal.livreurId || ratingModal.voyageurId,
         score: rating.score,
         comment: rating.comment,
       });
       setRatingModal(null);
       loadData();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
   };
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><RefreshCw className="animate-spin text-blue-500" size={32} /></div>;
@@ -79,6 +83,7 @@ export default function DestinataireeDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-5xl mx-auto px-4 py-6">
+        {pageError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{pageError}</div>}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800">Bonjour, {user?.name?.split(" ")[0]} 👋</h1>
           <p className="text-gray-500 text-sm">Tableau de bord Destinataire</p>
@@ -87,22 +92,24 @@ export default function DestinataireeDashboard() {
         <div className="grid md:grid-cols-3 gap-4 mb-6">
           <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 text-orange-600">
             <div className="text-xs font-medium mb-1">En Attente</div>
-            <div className="text-2xl font-bold">{pending.length}</div>
+            <div className="text-2xl font-bold">{stats?.pending ?? 0}</div>
           </div>
           <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-green-600">
             <div className="text-xs font-medium mb-1">Livrés</div>
-            <div className="text-2xl font-bold">{delivered.length}</div>
+            <div className="text-2xl font-bold">{stats?.delivered ?? 0}</div>
           </div>
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-blue-600">
             <div className="text-xs font-medium mb-1">Total Reçus</div>
-            <div className="text-2xl font-bold">{colis.length}</div>
+            <div className="text-2xl font-bold">{stats?.total ?? meta?.total ?? 0}</div>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl border shadow-sm p-5 mb-6">
           <h3 className="font-semibold text-gray-800 mb-3">Suivre un Colis</h3>
           <form onSubmit={trackColis} className="flex gap-3">
+            <label htmlFor="recipient-tracking-id" className="sr-only">Identifiant de suivi</label>
             <input
+              id="recipient-tracking-id"
               type="text"
               value={trackId}
               onChange={(e) => setTrackId(e.target.value)}
@@ -190,11 +197,11 @@ export default function DestinataireeDashboard() {
                       <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
                         <CheckCircle size={12} /> Livré
                       </span>
-                      {c.livreurId && (
+                      {(c.livreurId || c.voyageurId) && (
                         <button
                           onClick={() => setRatingModal(c)}
                           className="p-1.5 text-yellow-500 hover:bg-yellow-50 rounded-lg"
-                          title="Noter le livreur"
+                          title="Noter le transporteur"
                         >
                           <Star size={16} />
                         </button>
@@ -214,19 +221,22 @@ export default function DestinataireeDashboard() {
             <div className="text-sm mt-2">Vos colis apparaîtront ici une fois expédiés</div>
           </div>
         )}
+        <Pagination meta={meta} onPageChange={loadData} label="Pagination des colis reçus" />
       </div>
 
       {ratingModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setRatingModal(null)}>
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-gray-800 mb-1 text-center">Noter le Livreur</h3>
+            <h3 className="font-bold text-gray-800 mb-1 text-center">Noter le transporteur</h3>
             <p className="text-sm text-gray-500 text-center mb-4">Pour la livraison {ratingModal.trackingId}</p>
             <div className="flex justify-center gap-2 mb-4">
               {[1, 2, 3, 4, 5].map((s) => (
                 <button key={s} onClick={() => setRating((p) => ({ ...p, score: s }))} className={`text-3xl transition-transform hover:scale-110 ${s <= rating.score ? "text-yellow-400" : "text-gray-200"}`}>★</button>
               ))}
             </div>
+            <label htmlFor="recipient-rating-comment" className="sr-only">Commentaire de notation</label>
             <textarea
+              id="recipient-rating-comment"
               value={rating.comment}
               onChange={(e) => setRating((p) => ({ ...p, comment: e.target.value }))}
               placeholder="Commentaire (optionnel)"

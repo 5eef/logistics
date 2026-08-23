@@ -29,6 +29,7 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'password' => static::$password ??= Hash::make('password'),
             'phone' => fake()->unique()->numerify('06########'),
+            'phone_verified_at' => now(),
             'role' => 'expediteur',
             'city' => 'Casablanca',
             'avatar_path' => null,

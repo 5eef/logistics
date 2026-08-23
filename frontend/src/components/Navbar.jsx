@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
@@ -13,18 +13,36 @@ export default function Navbar() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationError, setNotificationError] = useState(false);
+  const [notificationMeta, setNotificationMeta] = useState(null);
+  const userId = user?.id;
+
+  const refreshNotifications = useCallback((pageNumber = 1) => {
+    api.auth.notifications({ perPage: 10, page: pageNumber })
+      .then((page) => { setNotifications(page.data); setNotificationMeta(page.meta); setNotificationError(false); })
+      .catch(() => setNotificationError(true));
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
-
-    const refreshNotifications = () => {
-      api.auth.notifications().then(setNotifications).catch(() => {});
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setShowNotifs(false);
+        setShowMenu(false);
+        setMobileOpen(false);
+      }
     };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, []);
 
+  useEffect(() => {
+    if (!userId) return;
+
+    let connected = false;
     refreshNotifications();
     const echo = subscribeToUserNotifications({
-      userId: user.id,
-      token: localStorage.getItem("logistics_token"),
+      userId,
+      onConnectionChange: (isConnected) => { connected = isConnected; },
       onNotification: (notification) => {
         setNotifications((current) => [
           notification,
@@ -33,13 +51,11 @@ export default function Navbar() {
       },
     });
 
-    if (echo) {
-      return () => echo.disconnect();
-    }
-
-    const interval = window.setInterval(refreshNotifications, 30000);
-    return () => window.clearInterval(interval);
-  }, [user?.id]);
+    const interval = window.setInterval(() => {
+      if (!connected) refreshNotifications();
+    }, 30000);
+    return () => { window.clearInterval(interval); echo?.disconnect(); };
+  }, [userId, refreshNotifications]);
 
   const unread = notifications.filter((n) => !n.isRead).length;
 
@@ -97,12 +113,12 @@ export default function Navbar() {
     <nav className="bg-[#1a2744] text-white shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/")}>
+          <button type="button" className="flex items-center gap-3" onClick={() => navigate("/")} aria-label="Retour à l’accueil">
             <div className="w-9 h-9 bg-orange-500 rounded-lg flex items-center justify-center">
               <Package size={20} />
             </div>
             <span className="font-bold text-xl tracking-wide">LOGISTICS</span>
-          </div>
+          </button>
 
           <div className="hidden md:flex items-center gap-6">
             <button onClick={() => navigate("/")} className="text-gray-300 hover:text-white text-sm transition-colors">
@@ -123,6 +139,8 @@ export default function Navbar() {
                     onClick={() => { setShowNotifs(!showNotifs); setShowMenu(false); }}
                     className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
                     aria-label="Ouvrir les notifications"
+                    aria-expanded={showNotifs}
+                    aria-controls="desktop-notifications"
                   >
                     <Bell size={20} />
                     {unread > 0 && (
@@ -132,25 +150,32 @@ export default function Navbar() {
                     )}
                   </button>
                   {showNotifs && (
-                    <div className="absolute right-0 top-12 w-80 bg-white text-gray-800 rounded-xl shadow-2xl border overflow-hidden z-50">
+                    <div id="desktop-notifications" className="absolute right-0 top-12 w-80 bg-white text-gray-800 rounded-xl shadow-2xl border overflow-hidden z-50">
                       <div className="px-4 py-3 border-b font-semibold text-sm">Notifications</div>
                       <div className="max-h-72 overflow-y-auto">
                         {notifications.length === 0 ? (
                           <div className="px-4 py-6 text-center text-gray-400 text-sm">Aucune notification</div>
                         ) : (
-                          notifications.slice(0, 10).map((n) => (
-                            <div
+                          notifications.map((n) => (
+                            <button type="button"
                               key={n.id}
                               onClick={() => markRead(n.id)}
-                              className={`px-4 py-3 border-b cursor-pointer hover:bg-gray-50 transition-colors ${!n.isRead ? "bg-blue-50" : ""}`}
+                              className={`block w-full text-left px-4 py-3 border-b hover:bg-gray-50 transition-colors ${!n.isRead ? "bg-blue-50" : ""}`}
                             >
                               <div className="text-sm font-medium">{n.title}</div>
                               <div className="text-xs text-gray-500 mt-0.5">{n.message}</div>
                               <div className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleDateString("fr-MA")}</div>
-                            </div>
+                            </button>
                           ))
                         )}
                       </div>
+                      {notificationMeta?.lastPage > 1 && (
+                        <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-gray-600">
+                          <button type="button" disabled={notificationMeta.currentPage <= 1} onClick={() => refreshNotifications(notificationMeta.currentPage - 1)} className="rounded px-2 py-1 disabled:opacity-40">Précédent</button>
+                          <span>{notificationMeta.total} notifications</span>
+                          <button type="button" disabled={notificationMeta.currentPage >= notificationMeta.lastPage} onClick={() => refreshNotifications(notificationMeta.currentPage + 1)} className="rounded px-2 py-1 disabled:opacity-40">Suivant</button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -214,6 +239,9 @@ export default function Navbar() {
             <button
               className="md:hidden p-2 rounded-lg hover:bg-white/10"
               onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-navigation"
             >
               {mobileOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -221,12 +249,23 @@ export default function Navbar() {
         </div>
 
         {mobileOpen && (
-          <div className="md:hidden pb-4 border-t border-white/10 pt-3 space-y-2">
+          <div id="mobile-navigation" className="md:hidden pb-4 border-t border-white/10 pt-3 space-y-2">
             <button onClick={() => { navigate("/"); setMobileOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white rounded-lg hover:bg-white/10">
               Suivi Public
             </button>
             {user ? (
               <>
+                <section className="rounded-lg bg-white/5 p-3" aria-labelledby="mobile-notifications-title">
+                  <h2 id="mobile-notifications-title" className="mb-2 flex items-center gap-2 text-sm font-semibold"><Bell size={16} /> Notifications ({unread})</h2>
+                  {notificationError && <p className="text-xs text-amber-300" role="status">Notifications momentanément indisponibles.</p>}
+                  {!notificationError && notifications.length === 0 && <p className="text-xs text-gray-400">Aucune notification</p>}
+                  {notifications.slice(0, 3).map((notification) => (
+                    <button type="button" key={notification.id} onClick={() => markRead(notification.id)} className="block w-full border-t border-white/10 py-2 text-left text-xs text-gray-200">
+                      <span className="font-medium">{notification.title}</span>
+                      <span className="block text-gray-400">{notification.message}</span>
+                    </button>
+                  ))}
+                </section>
                 <button onClick={() => { navigate(dashboardPath()); setMobileOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white rounded-lg hover:bg-white/10">
                   Tableau de Bord
                 </button>

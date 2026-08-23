@@ -26,7 +26,7 @@ class ProfileTest extends TestCase
             ->assertJsonPath('name', 'Nouveau nom')
             ->assertJsonPath('city', 'Rabat');
 
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => '0698765432']);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => '+212698765432']);
         $this->assertDatabaseHas('notifications', [
             'user_id' => $user->id,
             'title' => 'Profil mis à jour',

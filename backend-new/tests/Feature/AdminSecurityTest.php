@@ -19,7 +19,7 @@ class AdminSecurityTest extends TestCase
         $carrier->createToken('laptop');
 
         $this->withToken($adminToken)
-            ->patchJson("/api/admin/couriers/{$carrier->id}/ban")
+            ->patchJson("/api/admin/couriers/{$carrier->id}/ban", ['reason' => 'Violation grave et documentée'])
             ->assertOk()
             ->assertJsonPath('is_banned', true);
 
@@ -36,7 +36,7 @@ class AdminSecurityTest extends TestCase
 
         $adminToken = $admin->createToken('admin')->plainTextToken;
         $this->withToken($adminToken)
-            ->patchJson("/api/admin/couriers/{$sender->id}/ban")
+            ->patchJson("/api/admin/couriers/{$sender->id}/ban", ['reason' => 'Test de cible non transporteur'])
             ->assertNotFound();
 
         $this->assertFalse($sender->fresh()->is_banned);

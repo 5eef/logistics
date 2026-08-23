@@ -6,5 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class TicketResponse extends Model
 {
-    protected $fillable = ['ticket_id','user_id','user_name','message'];
+    protected $fillable = ['ticket_id', 'user_id', 'user_name', 'message'];
 }

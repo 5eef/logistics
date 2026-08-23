@@ -19,9 +19,13 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: sqlite3
+          extensions: pdo_sqlite, mbstring, intl, fileinfo
+          coverage: none
       - run: composer install --no-interaction --prefer-dist --optimize-autoloader
       - run: composer validate --strict --no-check-publish
+      - run: composer audit --locked
+      - run: composer lint
+      - run: composer analyse
       - run: php artisan test
 
   frontend:
@@ -37,6 +41,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run lint
+      - run: npm run typecheck
       - run: npm run test
       - run: npm run build
       - run: npx playwright install --with-deps chromium

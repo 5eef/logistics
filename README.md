@@ -1,252 +1,90 @@
-# Logistics
+# Logistics School
 
-Plateforme web de gestion de livraisons au Maroc, construite avec **Laravel 13** et **React 18**.
+Application monolithique modulaire de livraison : une API Laravel 13, une SPA React 18 et Reverb pour les notifications en temps réel.
 
-Logistics met en relation expéditeurs, livreurs, voyageurs et destinataires dans un parcours complet : création d’un colis, attribution à un transporteur vérifié, suivi des statuts, confirmation par PIN, notation et support administratif.
-
-> Projet portfolio full-stack — API REST Laravel, authentification Sanctum et interface React responsive.
-
-[![Laravel](https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white)](https://laravel.com/)
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111827)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
-[![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.3-777BB4?logo=php&logoColor=white)](https://www.php.net/)
-[![Tests](https://img.shields.io/badge/tests-28%20passing-22C55E)](#tests-et-qualité)
-
-## Fonctionnalités
-
-### Expéditeur
-
-- création d’expéditions avec estimation et informations du destinataire ;
-- génération d’un identifiant de suivi et d’un PIN de livraison ;
-- tableau de bord, statistiques et historique des statuts ;
-- consultation des expéditions et création de tickets support.
-
-### Livreur
-
-- inscription avec informations d’identité, permis et véhicule ;
-- validation du compte par un administrateur ;
-- disponibilité en ligne et consultation des colis de sa ville ;
-- prise en charge atomique d’un colis ;
-- progression contrôlée des statuts et confirmation finale par PIN.
-
-### Voyageur
-
-- recherche de colis éligibles entre deux villes ;
-- prise en charge d’une livraison sur un trajet compatible ;
-- suivi des livraisons assignées.
-
-### Destinataire
-
-- consultation des colis associés à son numéro de téléphone ;
-- suivi de livraison ;
-- notation du transporteur après livraison.
-
-### Administration
-
-- statistiques globales ;
-- validation ou rejet des transporteurs ;
-- avertissement, suspension et bannissement ;
-- gestion des colis et des tickets support.
-
-## Parcours d’une livraison
-
-```mermaid
-flowchart LR
-    A[Expéditeur] -->|Crée le colis| B[En attente]
-    B -->|Prise en charge atomique| C[Transporteur vérifié]
-    C --> D[Récupéré]
-    D --> E[En transit]
-    E --> F[En livraison]
-    F -->|PIN valide| G[Livré]
-    G --> H[Notation par le destinataire]
-```
+Le parcours principal couvre la création tarifée côté serveur, la prise en charge atomique par un transporteur vérifié, les transitions d’état contrôlées, la remise finale par PIN, le paiement administratif séparé, la notation et le support.
 
 ## Architecture
 
 ```text
-logistics/
-├── backend-new/              API Laravel
-│   ├── app/
-│   │   ├── Http/Controllers  Auth, colis, tickets et administration
-│   │   ├── Http/Middleware   rôles et état des comptes
-│   │   └── Models            modèles Eloquent
-│   ├── database/
-│   │   ├── migrations        schéma SQLite
-│   │   └── seeders           données de démonstration locales
-│   ├── routes/api.php        routes REST
-│   └── tests/                tests PHPUnit/Laravel
-├── frontend/                 application React/Vite
-│   └── src/
-│       ├── components/       navigation et composants UI
-│       ├── contexts/         authentification
-│       ├── lib/api.js        client API et conversion camel/snake case
-│       └── pages/            accueil et dashboards par rôle
-└── LANCER_SITE.bat           lancement Windows simplifié
+frontend/       React, Vite, Tailwind, Wouter, React Query, Reverb/Echo
+backend-new/    Laravel, Sanctum SPA, Eloquent, queue, Reverb
+scripts/        contrôles non destructifs de préparation production
 ```
 
-## Stack technique
+Le navigateur s’authentifie avec la session first-party de Sanctum : cookie de session HttpOnly, cookie XSRF lisible par le client et requêtes `credentials: include`. Aucun bearer token n’est stocké dans `localStorage`.
 
-| Domaine | Technologies |
-|---|---|
-| Backend | PHP, Laravel 13, Eloquent, Laravel Sanctum |
-| Frontend | React 18, Vite 6, Tailwind CSS 4 |
-| UI | Radix UI, Lucide React, Recharts |
-| Base de données | SQLite en environnement local |
-| Tests | PHPUnit / Laravel Feature Tests |
-| Sécurité | tokens Sanctum, contrôle des rôles, rate limiting, PIN haché |
+## Garanties métier importantes
 
-## Sécurité intégrée
+- Le prix final est calculé par `ShipmentPricingService`; tout champ `price` client est refusé.
+- La création accepte une clé UUID d’idempotence et possède une contrainte unique par expéditeur.
+- L’endpoint général de statut ne peut jamais livrer un colis; seul un PIN correct depuis `out_for_delivery` le peut.
+- Les échecs PIN sont comptés, verrouillés temporairement et limités par utilisateur + colis.
+- Une livraison ne confirme jamais automatiquement le paiement.
+- Le destinataire privé est identifié par `destinataire_id`, lié uniquement à un téléphone vérifié.
+- Un voyageur doit posséder un trajet actif côté serveur correspondant à la route.
+- Les overrides, paiements et actions sensibles de modération sont explicites et audités.
+- Le tracking public utilise une Resource allowlistée sans identifiant interne ni données personnelles.
 
-- PIN stocké sous forme de hash et révélé uniquement à la création du colis ;
-- prise en charge transactionnelle empêchant deux transporteurs d’accepter le même colis ;
-- transitions de statut contrôlées et retries idempotents ;
-- blocage des tokens appartenant aux comptes suspendus ou bannis ;
-- transporteurs obligatoirement vérifiés avant toute prise en charge ;
-- réponses publiques limitées afin de ne pas exposer téléphone, nom ou adresse exacte ;
-- validation et autorisation des tickets liés aux colis ;
-- rate limiting sur la connexion, l’inscription, le suivi et la validation PIN ;
-- timeout frontend sans retry automatique des mutations.
+## Prérequis locaux
 
-## Prérequis
+- PHP 8.3 ou supérieur avec PDO, SQLite (local), mbstring, OpenSSL, fileinfo et XML;
+- Composer 2;
+- Node.js 24 et npm;
+- Git.
 
-- PHP `>= 8.3` ;
-- Composer 2 ;
-- Node.js et npm ;
-- extension SQLite activée pour PHP ;
-- Git pour cloner le projet.
-
-## Installation manuelle
-
-### 1. Cloner le dépôt
-
-```powershell
-git clone https://github.com/Seef590/logistics.git
-cd logistics
-```
-
-### 2. Préparer le backend
+## Installation locale
 
 ```powershell
 cd backend-new
 composer install
 Copy-Item .env.example .env
 php artisan key:generate
+if (-not (Test-Path database\database.sqlite)) { New-Item database\database.sqlite -ItemType File }
+php artisan migrate
 
-if (-not (Test-Path database\database.sqlite)) {
-    New-Item database\database.sqlite -ItemType File
-}
-
-php artisan migrate --seed
-php artisan serve --host=127.0.0.1 --port=8000
-```
-
-Le backend est alors disponible sur : `http://127.0.0.1:8000`.
-
-### 3. Préparer le frontend
-
-Dans un second terminal :
-
-```powershell
-cd logistics\frontend
+cd ..\frontend
 npm ci
 Copy-Item .env.example .env
-npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Ouvrir ensuite : `http://127.0.0.1:5173`.
+Lancer ensuite l’API, le worker, Reverb et Vite dans des terminaux séparés, ou utiliser `LANCER_SITE.bat`. Le script local n’injecte des données de démonstration que si `DEMO_SEED=1` est défini explicitement; le seeder refuse toujours l’environnement production.
 
-## Lancement rapide sous Windows
+## Qualité
 
-Après clonage, il est également possible de lancer :
-
-```powershell
-.\LANCER_SITE.bat
-```
-
-Le script :
-
-- crée les fichiers locaux manquants ;
-- installe les dépendances si nécessaire ;
-- préserve une clé Laravel déjà existante ;
-- applique les migrations ;
-- injecte les données de démonstration uniquement lors de la création d’une nouvelle base ;
-- démarre le backend et le frontend dans deux terminaux.
-
-## Démonstration locale
-
-Après exécution du seeder, le suivi public peut être testé avec :
-
-```text
-LOG2024ABC
-```
-
-Les comptes de démonstration sont affichés par `LANCER_SITE.bat` et sur la page de connexion en mode développement. Ils sont destinés exclusivement à une installation locale et le seeder refuse de s’exécuter en production.
-
-## Tests et qualité
-
-### Backend
+Backend :
 
 ```powershell
 cd backend-new
 composer validate --strict
-composer check-platform-reqs
+composer audit --locked
+composer lint
+composer analyse
 php artisan test
-composer audit
 ```
 
-État de la suite au dernier audit :
-
-```text
-28 tests réussis
-81 assertions
-```
-
-### Frontend
+Frontend :
 
 ```powershell
 cd frontend
-npm audit
+npm audit --audit-level=high
+npm run lint
+npm run typecheck
+npm test
 npm run build
+npm run test:e2e
 ```
 
-État au dernier audit :
+Le contrôle production complet est disponible via :
 
-```text
-npm audit : 0 vulnérabilité
-Vite build : réussi
+```powershell
+.\scripts\preflight.ps1
 ```
 
-## Configuration
+Ce script ne déploie rien, ne modifie pas `.env` et n’exécute aucune migration.
 
-Les fichiers réels d’environnement ne doivent jamais être publiés :
+## Documentation
 
-```text
-backend-new/.env
-frontend/.env
-```
-
-Utiliser uniquement les modèles versionnés :
-
-```text
-backend-new/.env.example
-frontend/.env.example
-```
-
-Variable frontend principale :
-
-```env
-VITE_API_URL=http://127.0.0.1:8000/api
-```
-
-## Limites connues et prochaines étapes
-
-- mettre à jour les dépendances Composer signalées par `composer audit` avant tout déploiement public ;
-- ajouter une vérification OTP/SMS de la propriété du numéro de téléphone ;
-- séparer formellement l’état du paiement de celui de la livraison ;
-- envisager des cookies HttpOnly pour une future authentification web en production ;
-- découper progressivement le bundle frontend par route ;
-- ajouter ESLint, un typecheck et des tests de composants frontend.
-
-## Auteur
-
-Développé par [Seef590](https://github.com/Seef590) comme projet full-stack de portfolio.
+- [PRODUCTION.md](PRODUCTION.md) : configuration générique, processus, sauvegarde et rollback.
+- [README_SOUTENANCE.md](README_SOUTENANCE.md) : démonstration locale.
+- `docs/FINAL_PRODUCTION_AUDIT.md` : état initial, corrections, résultats réels et bloqueurs restants.

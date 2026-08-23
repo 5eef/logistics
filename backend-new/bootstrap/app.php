@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum', 'active', 'throttle:api']],
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->statefulApi();
         $middleware->append(SecurityHeaders::class);
         $middleware->alias([
             'role' => RoleMiddleware::class,

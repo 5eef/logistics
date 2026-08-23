@@ -1,0 +1,13 @@
+{
+    "preset": "laravel",
+    "notPath": [
+        "database/migrations/2024_01_01_000001_create_users_table.php",
+        "database/migrations/2024_01_01_000002_create_colis_table.php",
+        "database/migrations/2024_01_01_000003_create_status_histories_table.php",
+        "database/migrations/2024_01_01_000004_create_tickets_table.php",
+        "database/migrations/2024_01_01_000005_create_ticket_responses_table.php",
+        "database/migrations/2024_01_01_000006_create_ratings_table.php",
+        "database/migrations/2024_01_01_000007_create_notifications_table.php",
+        "database/migrations/2024_01_01_000008_create_personal_access_tokens_table.php"
+    ]
+}

@@ -1,24 +1,19 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../lib/api";
 import Navbar from "../../components/Navbar";
+import Pagination from "../../components/Pagination";
 import {
   Package, MapPin, CheckCircle, Clock, Star, RefreshCw,
-  Phone, Key, TrendingUp, DollarSign, AlertTriangle
+  Phone, Key, DollarSign, AlertTriangle
 } from "lucide-react";
 
 const statusLabels = {
   pending: "En attente", picked_up: "Récupéré", in_transit: "En Transit",
   out_for_delivery: "En Livraison", delivered: "Livré", failed: "Échoué",
 };
-
-const CITIES = [
-  "Casablanca", "Rabat", "Marrakech", "Fès", "Tanger", "Agadir",
-  "Meknès", "Oujda", "Kénitra", "Tétouan", "Safi", "Mohammedia",
-  "Khouribga", "Béni Mellal", "El Jadida", "Nador", "Settat", "Laâyoune"
-];
 
 export default function LivreurDashboard() {
   const { user, updateUser } = useAuth();
@@ -31,36 +26,36 @@ export default function LivreurDashboard() {
   const [pinModal, setPinModal] = useState(null);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
-  const [statusModal, setStatusModal] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [pageError, setPageError] = useState("");
+  const [availableMeta, setAvailableMeta] = useState(null);
+  const [deliveriesMeta, setDeliveriesMeta] = useState(null);
 
-  useEffect(() => {
-    if (!user) { navigate("/auth"); return; }
-    if (!user.isVerified && user.verificationStatus !== "approved") {
-      // still show dashboard but with pending banner
-    }
-    loadData();
-  }, [user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async (availablePage = 1, deliveriesPage = 1) => {
     setLoading(true);
     try {
       const [avail, mine, s] = await Promise.all([
-        api.colis.list({ status: "available" }),
-        api.colis.list(),
+        api.colis.list({ status: "available", page: availablePage }),
+        api.colis.list({ page: deliveriesPage }),
         api.colis.stats(),
       ]);
-      setAvailable(avail);
-      setMyDeliveries(mine);
+      setAvailable(avail.data); setAvailableMeta(avail.meta);
+      setMyDeliveries(mine.data); setDeliveriesMeta(mine.meta);
       setStats(s);
-    } catch (e) { console.error(e); }
+      setPageError("");
+    } catch (e) { setPageError(e.message); }
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!user) { navigate("/auth"); return; }
+    loadData();
+  }, [user, navigate, loadData]);
 
   const toggleOnline = async () => {
     try {
       await updateUser({ isOnline: !user.isOnline });
-    } catch (e) { console.error(e); }
+    } catch (e) { setPageError(e.message); }
   };
 
   const acceptColis = async (colis) => {
@@ -69,7 +64,7 @@ export default function LivreurDashboard() {
       await api.colis.updateStatus(colis.id, "picked_up", "Colis récupéré par le livreur");
       loadData();
       setTab("deliveries");
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
     setUpdating(false);
   };
 
@@ -77,9 +72,8 @@ export default function LivreurDashboard() {
     setUpdating(true);
     try {
       await api.colis.updateStatus(colisId, status, msg);
-      setStatusModal(null);
       loadData();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
     setUpdating(false);
   };
 
@@ -104,13 +98,14 @@ export default function LivreurDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {pageError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{pageError}</div>}
 
         {user?.verificationStatus === "pending" && (
           <div className="bg-yellow-50 border border-yellow-300 rounded-2xl p-4 mb-5 flex items-center gap-3">
             <AlertTriangle size={20} className="text-yellow-600 flex-shrink-0" />
             <div>
               <div className="font-semibold text-yellow-800">Compte en cours de vérification</div>
-              <div className="text-sm text-yellow-700">Vos documents sont en cours d'examen par notre équipe. Délai: 24-48h.</div>
+              <div className="text-sm text-yellow-700">Vos informations sont en cours d'examen par notre équipe. Délai: 24-48h.</div>
             </div>
           </div>
         )}
@@ -186,18 +181,16 @@ export default function LivreurDashboard() {
                         <div className="flex-1">
                           <div className="text-xs text-gray-500">De</div>
                           <div className="font-semibold text-sm">{c.fromCity}</div>
-                          <div className="text-xs text-gray-400 truncate">{c.fromAddress}</div>
                         </div>
                         <div className="text-gray-300">→</div>
                         <div className="flex-1">
                           <div className="text-xs text-gray-500">Vers</div>
                           <div className="font-semibold text-sm">{c.toCity}</div>
-                          <div className="text-xs text-gray-400 truncate">{c.toAddress}</div>
                         </div>
                       </div>
                       <div className="flex justify-between text-sm mb-3">
                         <span className="text-gray-500">{c.weight} kg • {c.description || "Colis"}</span>
-                        <span className="text-gray-500">{c.recipientName}</span>
+                        <span className="text-gray-500">Détails protégés avant acceptation</span>
                       </div>
                       {c.isVoyageurEligible && (
                         <div className="text-xs bg-teal-50 text-teal-700 border border-teal-200 rounded-lg px-2 py-1 mb-3">
@@ -291,6 +284,14 @@ export default function LivreurDashboard() {
             )}
           </div>
         )}
+        <Pagination
+          meta={tab === "available" ? availableMeta : deliveriesMeta}
+          onPageChange={(page) => loadData(
+            tab === "available" ? page : (availableMeta?.currentPage || 1),
+            tab === "deliveries" ? page : (deliveriesMeta?.currentPage || 1),
+          )}
+          label={tab === "available" ? "Pagination des colis disponibles" : "Pagination de mes livraisons"}
+        />
       </div>
 
       {pinModal && (
@@ -303,7 +304,9 @@ export default function LivreurDashboard() {
               <h3 className="font-bold text-gray-800 text-lg">Valider la Livraison</h3>
               <p className="text-sm text-gray-500 mt-1">Demandez le code PIN au destinataire</p>
             </div>
+            <label htmlFor="courier-delivery-pin" className="sr-only">Code PIN de livraison</label>
             <input
+              id="courier-delivery-pin"
               type="text"
               value={pin}
               onChange={(e) => setPin(e.target.value)}

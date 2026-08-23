@@ -1,15 +1,16 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../lib/api";
 import Navbar from "../../components/Navbar";
 import CreateShipment from "./CreateShipment";
+import Pagination from "../../components/Pagination";
 import {
-  Package, Plus, TrendingUp, Clock, CheckCircle, XCircle,
-  Eye, Star, MessageSquare, RefreshCw, QrCode, DollarSign
+  Package, Plus, Clock, CheckCircle,
+  Eye, Star, MessageSquare, RefreshCw, DollarSign
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const statusLabels = {
   created: "Créé", pending: "En attente", picked_up: "Récupéré",
@@ -31,42 +32,46 @@ export default function ExpediteurDashboard() {
   const [stats, setStats] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
   const [selected, setSelected] = useState(null);
   const [ratingModal, setRatingModal] = useState(null);
   const [rating, setRating] = useState({ score: 5, comment: "" });
   const [ticketForm, setTicketForm] = useState({ subject: "", message: "", priority: "medium" });
+  const [colisMeta, setColisMeta] = useState(null);
+  const [ticketsMeta, setTicketsMeta] = useState(null);
+
+  const loadData = useCallback(async (colisPage = 1, ticketsPage = 1) => {
+    setLoading(true);
+    try {
+      const [c, s, t] = await Promise.all([
+        api.colis.list({ page: colisPage }),
+        api.colis.stats(),
+        api.tickets.list({ page: ticketsPage }),
+      ]);
+      setColis(c.data); setColisMeta(c.meta);
+      setStats(s);
+      setTickets(t.data); setTicketsMeta(t.meta);
+      setPageError("");
+    } catch (e) { setPageError(e.message); }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!user) { navigate("/auth"); return; }
     loadData();
-  }, [user]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [c, s, t] = await Promise.all([
-        api.colis.list(),
-        api.colis.stats(),
-        api.tickets.list(),
-      ]);
-      setColis(c);
-      setStats(s);
-      setTickets(t);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
+  }, [user, navigate, loadData]);
 
   const submitRating = async () => {
     if (!ratingModal) return;
     try {
       await api.colis.rate(ratingModal.id, {
-        toUserId: ratingModal.livreurId,
+        toUserId: ratingModal.livreurId || ratingModal.voyageurId,
         score: rating.score,
         comment: rating.comment,
       });
       setRatingModal(null);
       loadData();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
   };
 
   const submitTicket = async (e) => {
@@ -75,7 +80,7 @@ export default function ExpediteurDashboard() {
       await api.tickets.create(ticketForm);
       setTicketForm({ subject: "", message: "", priority: "medium" });
       loadData();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
   };
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><RefreshCw className="animate-spin text-blue-500" size={32} /></div>;
@@ -86,6 +91,7 @@ export default function ExpediteurDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {pageError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{pageError}</div>}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Bonjour, {user?.name?.split(" ")[0]} 👋</h1>
@@ -164,8 +170,8 @@ export default function ExpediteurDashboard() {
         {tab === "colis" && (
           <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
             <div className="px-5 py-4 border-b flex items-center justify-between">
-              <h3 className="font-semibold text-gray-800">Mes Expéditions ({colis.length})</h3>
-              <button onClick={loadData} className="text-gray-400 hover:text-gray-600"><RefreshCw size={16} /></button>
+              <h3 className="font-semibold text-gray-800">Mes Expéditions ({colisMeta?.total ?? 0})</h3>
+              <button onClick={() => loadData()} className="text-gray-400 hover:text-gray-600"><RefreshCw size={16} /></button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -194,7 +200,7 @@ export default function ExpediteurDashboard() {
                           <button onClick={() => setSelected(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg" title="Détails">
                             <Eye size={15} />
                           </button>
-                          {c.status === "delivered" && c.livreurId && (
+                          {c.status === "delivered" && (c.livreurId || c.voyageurId) && (
                             <button onClick={() => setRatingModal(c)} className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-lg" title="Noter">
                               <Star size={15} />
                             </button>
@@ -212,6 +218,7 @@ export default function ExpediteurDashboard() {
                 </div>
               )}
             </div>
+            <div className="px-5 pb-5"><Pagination meta={colisMeta} onPageChange={(page) => loadData(page, ticketsMeta?.currentPage || 1)} label="Pagination de mes expéditions" /></div>
           </div>
         )}
 
@@ -225,8 +232,9 @@ export default function ExpediteurDashboard() {
               <div className="px-5 py-4 border-b font-semibold text-gray-800">Nouveau Ticket</div>
               <form onSubmit={submitTicket} className="p-5 space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Sujet</label>
+                  <label htmlFor="ticket-subject" className="block text-xs font-semibold text-gray-600 mb-1.5">Sujet</label>
                   <input
+                    id="ticket-subject"
                     type="text"
                     value={ticketForm.subject}
                     onChange={(e) => setTicketForm((p) => ({ ...p, subject: e.target.value }))}
@@ -235,8 +243,9 @@ export default function ExpediteurDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Priorité</label>
+                  <label htmlFor="ticket-priority" className="block text-xs font-semibold text-gray-600 mb-1.5">Priorité</label>
                   <select
+                    id="ticket-priority"
                     value={ticketForm.priority}
                     onChange={(e) => setTicketForm((p) => ({ ...p, priority: e.target.value }))}
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -245,8 +254,9 @@ export default function ExpediteurDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Message</label>
+                  <label htmlFor="ticket-message" className="block text-xs font-semibold text-gray-600 mb-1.5">Message</label>
                   <textarea
+                    id="ticket-message"
                     value={ticketForm.message}
                     onChange={(e) => setTicketForm((p) => ({ ...p, message: e.target.value }))}
                     required
@@ -261,7 +271,7 @@ export default function ExpediteurDashboard() {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border">
-              <div className="px-5 py-4 border-b font-semibold text-gray-800">Mes Tickets ({tickets.length})</div>
+              <div className="px-5 py-4 border-b font-semibold text-gray-800">Mes Tickets ({ticketsMeta?.total ?? 0})</div>
               <div className="divide-y max-h-96 overflow-y-auto">
                 {tickets.map((t) => (
                   <div key={t.id} className="p-4">
@@ -283,6 +293,7 @@ export default function ExpediteurDashboard() {
                   <div className="text-center py-8 text-gray-400 text-sm"><MessageSquare size={32} className="mx-auto mb-2 opacity-30" />Aucun ticket</div>
                 )}
               </div>
+              <div className="px-5 pb-5"><Pagination meta={ticketsMeta} onPageChange={(page) => loadData(colisMeta?.currentPage || 1, page)} label="Pagination de mes tickets" /></div>
             </div>
           </div>
         )}
@@ -347,7 +358,9 @@ export default function ExpediteurDashboard() {
                 <button key={s} onClick={() => setRating((p) => ({ ...p, score: s }))} className={`text-3xl ${s <= rating.score ? "text-yellow-400" : "text-gray-200"}`}>★</button>
               ))}
             </div>
+            <label htmlFor="sender-rating-comment" className="sr-only">Commentaire de notation</label>
             <textarea
+              id="sender-rating-comment"
               value={rating.comment}
               onChange={(e) => setRating((p) => ({ ...p, comment: e.target.value }))}
               placeholder="Commentaire (optionnel)"

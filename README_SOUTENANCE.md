@@ -1,31 +1,34 @@
-# Zaki Logistics - Soutenance
+# Démonstration locale
 
-## Lancement rapide
-Double-cliquer sur `LANCER_SITE.bat`, puis ouvrir : http://127.0.0.1:5173
+## Lancement
 
-## Comptes de test
-- Admin : admin@logistics.ma / admin123
-- Expediteur : expediteur@test.ma / test123
-- Livreur : livreur@test.ma / test123
-- Destinataire : destinataire@test.ma / test123
-- Voyageur : voyageur@test.ma / test123
+```powershell
+.\LANCER_SITE.bat
+```
 
-## Commandes utiles
-Backend :
-```bat
+Le script vérifie PHP, Composer, Node et npm, installe les dépendances de développement, applique uniquement les migrations en attente sur la base locale et démarre l’API, la queue, Reverb et Vite.
+
+Pour injecter volontairement les données de démonstration dans un environnement non-production :
+
+```powershell
+$env:DEMO_SEED = '1'
+.\LANCER_SITE.bat
+```
+
+Le seeder refuse `APP_ENV=production`. Le script n’affiche aucun mot de passe de démonstration.
+
+## Vérifications avant présentation
+
+```powershell
 cd backend-new
-php artisan migrate --force
-php artisan db:seed --force
-php artisan serve --host=127.0.0.1 --port=8000
-```
+php artisan test
 
-Frontend :
-```bat
-cd frontend
-npm run dev -- --host 127.0.0.1 --port 5173
+cd ..\frontend
+npm run lint
+npm run typecheck
+npm test
 npm run build
+npm run test:e2e
 ```
 
-## Copie USB
-Pour une demo sans internet, copier le dossier complet `zaki` avec `backend-new/vendor` et `frontend/node_modules`.
-Sur l'autre PC, PHP, Composer et Node.js doivent etre installes. Ensuite lancer `LANCER_SITE.bat`.
+Le suivi de démonstration `LOG2024ABC` n’est affiché dans l’interface qu’en mode Vite développement ou lorsque `VITE_DEMO_MODE=true` est configuré explicitement.

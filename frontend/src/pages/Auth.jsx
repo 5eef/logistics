@@ -16,7 +16,8 @@ export default function Auth() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [cities, setCities] = useState(["Casablanca"]);
+  const [success, setSuccess] = useState("");
+  const [cities, setCities] = useState([]);
 
   const [form, setForm] = useState({
     name: "", email: "", phone: "", password: "", city: "Casablanca",
@@ -24,12 +25,12 @@ export default function Auth() {
   });
 
   useEffect(() => {
-    api.misc.cities().then(setCities).catch(() => {});
+    api.misc.cities().then(setCities).catch(() => setError("Impossible de charger les villes prises en charge."));
   }, []);
 
   useEffect(() => {
     if (user) navigate(dashPath(user.role));
-  }, [user]);
+  }, [user, navigate]);
 
   const dashPath = (r) => {
     switch (r) {
@@ -62,6 +63,15 @@ export default function Auth() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    setError(""); setSuccess("");
+    if (!form.email) { setError("Saisissez votre adresse email."); return; }
+    try {
+      const result = await api.auth.forgotPassword(form.email);
+      setSuccess(result.message);
+    } catch (err) { setError(err.message); }
+  };
+
   const roleInfo = {
     expediteur: { label: "Expéditeur", icon: "✈", color: "blue", desc: "Créez et gérez vos expéditions" },
     livreur: { label: "Livreur", icon: "🛵", color: "green", desc: "Rejoignez notre réseau de livraison" },
@@ -70,18 +80,16 @@ export default function Auth() {
     admin: { label: "Administrateur", icon: "🔧", color: "purple", desc: "Accès administrateur" },
   };
 
-  const ri = roleInfo[role] || roleInfo.expediteur;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a2744] to-[#2d4080] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center gap-2 mb-4 cursor-pointer" onClick={() => navigate("/")}>
+          <button type="button" className="inline-flex items-center gap-2 mb-4" onClick={() => navigate("/")} aria-label="Retour à l’accueil">
             <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
               <Package size={22} className="text-white" />
             </div>
             <span className="text-white font-bold text-2xl">LOGISTICS</span>
-          </div>
+          </button>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -125,13 +133,15 @@ export default function Auth() {
                 <AlertCircle size={16} /> {error}
               </div>
             )}
+            {success && <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700" role="status">{success}</div>}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === "register" && (
                 <>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nom complet *</label>
+                    <label htmlFor="register-name" className="block text-xs font-semibold text-gray-600 mb-1.5">Nom complet *</label>
                     <input
+                      id="register-name"
                       type="text"
                       value={form.name}
                       onChange={(e) => set("name", e.target.value)}
@@ -141,8 +151,9 @@ export default function Auth() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Téléphone *</label>
+                    <label htmlFor="register-phone" className="block text-xs font-semibold text-gray-600 mb-1.5">Téléphone *</label>
                     <input
+                      id="register-phone"
                       type="tel"
                       value={form.phone}
                       onChange={(e) => set("phone", e.target.value)}
@@ -152,8 +163,9 @@ export default function Auth() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Ville *</label>
+                    <label htmlFor="register-city" className="block text-xs font-semibold text-gray-600 mb-1.5">Ville *</label>
                     <select
+                      id="register-city"
                       value={form.city}
                       onChange={(e) => set("city", e.target.value)}
                       className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -165,8 +177,9 @@ export default function Auth() {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Email *</label>
+                <label htmlFor="auth-email" className="block text-xs font-semibold text-gray-600 mb-1.5">Email *</label>
                 <input
+                  id="auth-email"
                   type="email"
                   value={form.email}
                   onChange={(e) => set("email", e.target.value)}
@@ -177,9 +190,10 @@ export default function Auth() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Mot de passe *</label>
+                <label htmlFor="auth-password" className="block text-xs font-semibold text-gray-600 mb-1.5">Mot de passe *</label>
                 <div className="relative">
                   <input
+                    id="auth-password"
                     type={showPass ? "text" : "password"}
                       value={form.password}
                       onChange={(e) => set("password", e.target.value)}
@@ -190,7 +204,7 @@ export default function Auth() {
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm focus:border-blue-500 focus:outline-none"
                   />
                   {mode === "register" && <p className="mt-1 text-xs text-gray-400">10 caractères minimum, avec lettres et chiffres.</p>}
-                  <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-3 text-gray-400">
+                  <button type="button" aria-label={showPass ? "Masquer le mot de passe" : "Afficher le mot de passe"} onClick={() => setShowPass(!showPass)} className="absolute right-3 top-3 text-gray-400 focus-visible:outline focus-visible:outline-2">
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
@@ -199,12 +213,13 @@ export default function Auth() {
               {mode === "register" && (role === "livreur" || role === "voyageur") && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2 text-yellow-700 font-semibold text-sm">
-                    <Upload size={16} /> Documents de vérification
+                    <Upload size={16} /> Informations de vérification
                   </div>
                   <p className="text-xs text-yellow-600">Votre compte sera activé après vérification par notre équipe (24-48h).</p>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Numéro CIN *</label>
+                    <label htmlFor="register-cin" className="block text-xs font-semibold text-gray-600 mb-1.5">Numéro CIN *</label>
                     <input
+                      id="register-cin"
                       type="text"
                       value={form.cin}
                       onChange={(e) => set("cin", e.target.value)}
@@ -216,8 +231,9 @@ export default function Auth() {
                   {role === "livreur" && (
                     <>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600 mb-1.5">Numéro de permis *</label>
+                        <label htmlFor="register-license" className="block text-xs font-semibold text-gray-600 mb-1.5">Numéro de permis *</label>
                         <input
+                          id="register-license"
                           type="text"
                           value={form.license}
                           onChange={(e) => set("license", e.target.value)}
@@ -227,8 +243,9 @@ export default function Auth() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600 mb-1.5">Type de véhicule</label>
+                        <label htmlFor="register-vehicle-type" className="block text-xs font-semibold text-gray-600 mb-1.5">Type de véhicule</label>
                         <select
+                          id="register-vehicle-type"
                           value={form.vehicleType}
                           onChange={(e) => set("vehicleType", e.target.value)}
                           className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -237,8 +254,9 @@ export default function Auth() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600 mb-1.5">Plaque d'immatriculation</label>
+                        <label htmlFor="register-vehicle-plate" className="block text-xs font-semibold text-gray-600 mb-1.5">Plaque d'immatriculation</label>
                         <input
+                          id="register-vehicle-plate"
                           type="text"
                           value={form.vehiclePlate}
                           onChange={(e) => set("vehiclePlate", e.target.value)}
@@ -258,6 +276,7 @@ export default function Auth() {
               >
                 {loading ? "Chargement..." : mode === "login" ? "SE CONNECTER" : "CRÉER MON COMPTE"}
               </button>
+              {mode === "login" && <button type="button" onClick={handleForgotPassword} className="w-full text-sm font-medium text-blue-700 hover:underline">Mot de passe oublié ?</button>}
             </form>
 
             <div className="text-center mt-4 text-sm text-gray-500">

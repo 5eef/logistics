@@ -83,6 +83,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Fatima Zahra',
                 'phone' => '0633333333',
+                'phone_verified_at' => now(),
                 'password' => Hash::make('test123'),
                 'role' => 'destinataire',
                 'city' => 'Casablanca',
@@ -143,6 +144,7 @@ class DatabaseSeeder extends Seeder
             ['tracking_id' => 'LOG2024ABC'],
             [
                 'expediteur_id' => $exp->id,
+                'destinataire_id' => $dest->id,
                 'livreur_id' => $liv->id,
                 'status' => 'in_transit',
                 'from_city' => 'Casablanca',
@@ -258,6 +260,8 @@ class DatabaseSeeder extends Seeder
                 'description' => 'Matériel électronique',
                 'price' => 80,
                 'is_paid' => true,
+                'payment_status' => 'paid',
+                'paid_at' => now()->subHours(12),
                 'payment_method' => 'cash',
                 'pin_code' => Hash::make('1122'),
                 'pin_validated' => true,
@@ -366,7 +370,7 @@ class DatabaseSeeder extends Seeder
                 [
                     'user_id' => $dest->id,
                     'title' => 'Colis en route',
-                    'message' => 'Votre colis sera livré aujourd\'hui. Code PIN: 4521',
+                    'message' => 'Votre colis sera livré aujourd\'hui. Le PIN doit être communiqué hors des notifications applicatives.',
                     'type' => 'success',
                     'is_read' => false,
                     'created_at' => now(),

@@ -1,12 +1,13 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../lib/api";
 import Navbar from "../../components/Navbar";
+import Pagination from "../../components/Pagination";
 import {
   Users, Package, TrendingUp, AlertTriangle, CheckCircle, XCircle,
-  RefreshCw, Star, MessageSquare, Shield, Ban, Eye, Bell
+  RefreshCw, Star, MessageSquare, Shield, Ban
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -30,31 +31,32 @@ export default function AdminDashboard() {
   const [ticketReply, setTicketReply] = useState("");
   const [rejReason, setRejReason] = useState("");
   const [warnReason, setWarnReason] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [pages, setPages] = useState({ users: null, couriers: null, tickets: null, colis: null });
+
+  const loadAll = useCallback(async (next = {}) => {
+    setLoading(true);
+    try {
+      const [s, u, p, t, c] = await Promise.all([
+        api.admin.stats(),
+        api.admin.users({ page: next.users || 1 }),
+        api.admin.pendingCouriers({ page: next.couriers || 1 }),
+        api.admin.tickets({ page: next.tickets || 1 }),
+        api.admin.colis({ page: next.colis || 1 }),
+      ]);
+      setStats(s);
+      setUsers(u.data); setPendingCouriers(p.data); setTickets(t.data); setColis(c.data);
+      setPages({ users: u.meta, couriers: p.meta, tickets: t.meta, colis: c.meta });
+      setPageError("");
+    } catch (e) { setPageError(e.message); }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!user) { navigate("/auth"); return; }
     if (user.role !== "admin") { navigate("/"); return; }
     loadAll();
-  }, [user]);
-
-  const loadAll = async () => {
-    setLoading(true);
-    try {
-      const [s, u, p, t, c] = await Promise.all([
-        api.admin.stats(),
-        api.admin.users(),
-        api.admin.pendingCouriers(),
-        api.admin.tickets(),
-        api.admin.colis(),
-      ]);
-      setStats(s);
-      setUsers(u);
-      setPendingCouriers(p);
-      setTickets(t);
-      setColis(c);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
+  }, [user, navigate, loadAll]);
 
   const verifyCourier = async (id, status) => {
     try {
@@ -62,7 +64,7 @@ export default function AdminDashboard() {
       setSelectedCourier(null);
       setRejReason("");
       loadAll();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
   };
 
   const warnCourier = async (id) => {
@@ -70,15 +72,17 @@ export default function AdminDashboard() {
       await api.admin.warnCourier(id, warnReason);
       setWarnReason("");
       loadAll();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
   };
 
   const banCourier = async (id) => {
+    const reason = window.prompt("Motif obligatoire du bannissement :");
+    if (!reason?.trim()) return;
     if (!confirm("Bannir définitivement cet utilisateur?")) return;
     try {
-      await api.admin.banCourier(id);
+      await api.admin.banCourier(id, reason.trim());
       loadAll();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
   };
 
   const replyTicket = async (id) => {
@@ -87,29 +91,30 @@ export default function AdminDashboard() {
       setSelectedTicket(null);
       setTicketReply("");
       loadAll();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setPageError(e.message); }
   };
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><RefreshCw className="animate-spin text-blue-500" size={32} /></div>;
 
   const tabs = [
     ["overview", "Aperçu", null],
-    ["couriers", `Vérification (${pendingCouriers.length})`, pendingCouriers.length > 0 ? "bg-red-500" : null],
+    ["couriers", `Vérification (${pages.couriers?.total ?? 0})`, (pages.couriers?.total ?? 0) > 0 ? "bg-red-500" : null],
     ["users", "Utilisateurs", null],
     ["colis", "Colis", null],
-    ["tickets", `Tickets (${tickets.filter((t) => t.status === "open").length})`, null],
+    ["tickets", `Tickets (${pages.tickets?.total ?? 0})`, null],
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {pageError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{pageError}</div>}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Tableau de Bord Administrateur</h1>
             <p className="text-gray-500 text-sm">Gestion globale de la plateforme Logistics</p>
           </div>
-          <button onClick={loadAll} className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-gray-50">
+          <button onClick={() => loadAll()} className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm hover:bg-gray-50">
             <RefreshCw size={16} /> Actualiser
           </button>
         </div>
@@ -183,7 +188,7 @@ export default function AdminDashboard() {
 
         {tab === "couriers" && (
           <div>
-            <h3 className="font-semibold text-gray-800 mb-4">Demandes de vérification ({pendingCouriers.length})</h3>
+            <h3 className="font-semibold text-gray-800 mb-4">Demandes de vérification ({pages.couriers?.total ?? 0})</h3>
             {pendingCouriers.length === 0 ? (
               <div className="bg-white rounded-2xl border p-12 text-center text-gray-400">
                 <Shield size={48} className="mx-auto mb-3 opacity-30" />
@@ -226,12 +231,13 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+            <Pagination meta={pages.couriers} onPageChange={(page) => loadAll({ couriers: page })} label="Pagination des transporteurs à vérifier" />
           </div>
         )}
 
         {tab === "users" && (
           <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b font-semibold text-gray-800">Tous les Utilisateurs ({users.length})</div>
+            <div className="px-5 py-4 border-b font-semibold text-gray-800">Tous les Utilisateurs ({pages.users?.total ?? 0})</div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
@@ -289,12 +295,13 @@ export default function AdminDashboard() {
                 </tbody>
               </table>
             </div>
+            <div className="px-5 pb-5"><Pagination meta={pages.users} onPageChange={(page) => loadAll({ users: page })} label="Pagination des utilisateurs" /></div>
           </div>
         )}
 
         {tab === "colis" && (
           <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b font-semibold text-gray-800">Tous les Colis ({colis.length})</div>
+            <div className="px-5 py-4 border-b font-semibold text-gray-800">Tous les Colis ({pages.colis?.total ?? 0})</div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
@@ -327,6 +334,7 @@ export default function AdminDashboard() {
                 </tbody>
               </table>
             </div>
+            <div className="px-5 pb-5"><Pagination meta={pages.colis} onPageChange={(page) => loadAll({ colis: page })} label="Pagination des colis" /></div>
           </div>
         )}
 
@@ -359,6 +367,7 @@ export default function AdminDashboard() {
                 <div>Aucun ticket</div>
               </div>
             )}
+            <Pagination meta={pages.tickets} onPageChange={(page) => loadAll({ tickets: page })} label="Pagination des tickets" />
           </div>
         )}
       </div>
@@ -369,8 +378,9 @@ export default function AdminDashboard() {
             <h3 className="font-bold text-gray-800 mb-4">Action sur {selectedCourier.name}</h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Raison / Motif</label>
+                <label htmlFor="courier-action-reason" className="block text-xs font-semibold text-gray-600 mb-1.5">Raison / Motif</label>
                 <textarea
+                  id="courier-action-reason"
                   value={rejReason || warnReason}
                   onChange={(e) => { setRejReason(e.target.value); setWarnReason(e.target.value); }}
                   rows={3}
@@ -411,7 +421,9 @@ export default function AdminDashboard() {
                   <div className="text-sm">{r.message}</div>
                 </div>
               ))}
+              <label htmlFor="admin-ticket-reply" className="sr-only">Réponse au ticket</label>
               <textarea
+                id="admin-ticket-reply"
                 value={ticketReply}
                 onChange={(e) => setTicketReply(e.target.value)}
                 rows={3}

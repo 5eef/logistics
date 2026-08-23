@@ -80,7 +80,7 @@ class ColisSecurityTest extends TestCase
     public function test_assigned_carrier_can_validate_the_pin_without_exposing_its_hash(): void
     {
         $carrier = $this->user('livreur');
-        $colis = $this->colis(['livreur_id' => $carrier->id, 'status' => 'in_transit']);
+        $colis = $this->colis(['livreur_id' => $carrier->id, 'status' => 'out_for_delivery']);
         Sanctum::actingAs($carrier);
 
         $this->postJson("/api/colis/{$colis->id}/validate-pin", ['pin' => '1234'])
@@ -95,7 +95,7 @@ class ColisSecurityTest extends TestCase
     public function test_pin_validation_retry_is_idempotent(): void
     {
         $carrier = $this->user('livreur');
-        $colis = $this->colis(['livreur_id' => $carrier->id, 'status' => 'in_transit']);
+        $colis = $this->colis(['livreur_id' => $carrier->id, 'status' => 'out_for_delivery']);
         Sanctum::actingAs($carrier);
 
         $this->postJson("/api/colis/{$colis->id}/validate-pin", ['pin' => '1234'])->assertOk();
@@ -141,11 +141,11 @@ class ColisSecurityTest extends TestCase
 
         $this->getJson('/api/colis?status=available')
             ->assertOk()
-            ->assertJsonCount(1)
-            ->assertJsonMissingPath('0.recipient_name')
-            ->assertJsonMissingPath('0.recipient_phone')
-            ->assertJsonMissingPath('0.from_address')
-            ->assertJsonMissingPath('0.to_address');
+            ->assertJsonCount(1, 'data')
+            ->assertJsonMissingPath('data.0.recipient_name')
+            ->assertJsonMissingPath('data.0.recipient_phone')
+            ->assertJsonMissingPath('data.0.from_address')
+            ->assertJsonMissingPath('data.0.to_address');
     }
 
     public function test_carrier_cannot_skip_or_reverse_shipment_statuses(): void
@@ -162,17 +162,17 @@ class ColisSecurityTest extends TestCase
         $this->assertSame('picked_up', $colis->fresh()->status);
     }
 
-    public function test_status_retry_does_not_duplicate_history_or_delivery_notification(): void
+    public function test_general_status_endpoint_cannot_bypass_the_delivery_pin(): void
     {
         $carrier = $this->user('livreur');
         $colis = $this->colis(['livreur_id' => $carrier->id, 'status' => 'in_transit']);
         Sanctum::actingAs($carrier);
 
-        $this->patchJson("/api/colis/{$colis->id}/status", ['status' => 'delivered'])->assertOk();
-        $this->patchJson("/api/colis/{$colis->id}/status", ['status' => 'delivered'])->assertOk();
+        $this->patchJson("/api/colis/{$colis->id}/status", ['status' => 'delivered'])->assertUnprocessable();
 
-        $this->assertDatabaseCount('status_histories', 1);
-        $this->assertDatabaseCount('notifications', 1);
+        $this->assertSame('in_transit', $colis->fresh()->status);
+        $this->assertDatabaseCount('status_histories', 0);
+        $this->assertDatabaseCount('notifications', 0);
     }
 
     public function test_unrelated_user_cannot_rate_a_carrier_for_someone_elses_shipment(): void
@@ -193,8 +193,9 @@ class ColisSecurityTest extends TestCase
     {
         $carrier = $this->user('livreur');
         $otherCarrier = $this->user('livreur');
-        $colis = $this->colis(['livreur_id' => $carrier->id, 'status' => 'delivered']);
-        Sanctum::actingAs($this->user('destinataire', $colis->recipient_phone));
+        $recipient = $this->user('destinataire', '0611111111');
+        $colis = $this->colis(['livreur_id' => $carrier->id, 'destinataire_id' => $recipient->id, 'status' => 'delivered']);
+        Sanctum::actingAs($recipient);
 
         $this->postJson("/api/colis/{$colis->id}/rate", [
             'to_user_id' => $otherCarrier->id,
@@ -257,7 +258,6 @@ class ColisSecurityTest extends TestCase
             'recipient_name' => 'Destinataire',
             'recipient_phone' => '0611111111',
             'weight' => 1.5,
-            'price' => 50,
         ];
     }
 }

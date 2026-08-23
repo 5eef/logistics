@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { api } from "../lib/api";
-import { Search, Package, CheckCircle, MapPin, ArrowRight } from "lucide-react";
+import { Search, CheckCircle, MapPin, ArrowRight } from "lucide-react";
 
 const statusSteps = ["created", "pending", "picked_up", "in_transit", "out_for_delivery", "delivered"];
+const demoMode = import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === "true";
 const statusLabels = {
   created: "Créé",
   pending: "En Attente",
@@ -145,11 +146,13 @@ export default function Home() {
               SUIVI DE COLIS SANS COMPTE
             </h2>
             <form onSubmit={handleTrack} className="flex gap-3">
+              <label htmlFor="tracking-id" className="sr-only">Identifiant de suivi</label>
               <input
+                id="tracking-id"
                 type="text"
                 value={trackingId}
                 onChange={(e) => setTrackingId(e.target.value)}
-                placeholder="Entrez votre ID de suivi (Ex: LOG2024ABC)"
+                placeholder={demoMode ? "Entrez votre ID de suivi (Ex: LOG2024ABC)" : "Entrez votre ID de suivi"}
                 className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none transition-colors font-mono"
               />
               <button
@@ -164,7 +167,7 @@ export default function Home() {
             {error && (
               <div className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2">{error}</div>
             )}
-            <div className="mt-2 text-xs text-gray-400 text-center">Essayez: LOG2024ABC</div>
+            {demoMode && <div className="mt-2 text-xs text-gray-400 text-center">Essayez : LOG2024ABC</div>}
             <TrackingResult colis={result} />
           </div>
         </div>

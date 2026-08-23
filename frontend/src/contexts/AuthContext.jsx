@@ -9,13 +9,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const fetchMe = useCallback(async () => {
-    const token = localStorage.getItem("logistics_token");
-    if (!token) { setLoading(false); return; }
     try {
       const u = await api.auth.me();
       setUser(u);
     } catch {
-      localStorage.removeItem("logistics_token");
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -23,24 +21,30 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
 
+  useEffect(() => {
+    const clearExpiredSession = () => setUser(null);
+    window.addEventListener("logistics:unauthorized", clearExpiredSession);
+    return () => window.removeEventListener("logistics:unauthorized", clearExpiredSession);
+  }, []);
+
   const login = async (email, password) => {
     const res = await api.auth.login(email, password);
-    localStorage.setItem("logistics_token", res.token);
     setUser(res.user);
     return res.user;
   };
 
   const register = async (data) => {
     const res = await api.auth.register(data);
-    localStorage.setItem("logistics_token", res.token);
     setUser(res.user);
     return res.user;
   };
 
   const logout = async () => {
-    try { await api.auth.logout(); } catch {}
-    localStorage.removeItem("logistics_token");
-    setUser(null);
+    try {
+      await api.auth.logout();
+    } finally {
+      setUser(null);
+    }
   };
 
   const updateUser = async (data) => {
