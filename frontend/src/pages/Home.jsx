@@ -253,6 +253,17 @@ export default function Home() {
       <footer className="bg-[#1a2744] text-gray-400 py-8 px-4 text-center text-sm">
         <div className="font-bold text-white text-lg mb-1">LOGISTICS</div>
         <div>Plateforme de gestion des livraisons au Maroc • © 2026</div>
+        <div className="mt-2">
+          Conçu et développé par{" "}
+          <a
+            href="https://github.com/5eef"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-orange-400 transition-colors hover:text-orange-300"
+          >
+            5eef
+          </a>
+        </div>
         <div className="mt-2 text-xs">Casablanca, Rabat, Marrakech, Fès, Tanger, Agadir et plus...</div>
       </footer>
     </div>

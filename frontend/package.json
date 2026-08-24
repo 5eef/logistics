@@ -1,6 +1,7 @@
 {
   "name": "logistics-frontend",
   "version": "1.0.0",
+  "author": "5eef (https://github.com/5eef)",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:staging": "playwright test --config playwright.staging.config.js",
+    "screenshots:portfolio": "playwright test --config playwright.portfolio.config.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

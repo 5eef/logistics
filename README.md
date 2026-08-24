@@ -1,108 +1,149 @@
 # Logistics School
 
-Application monolithique modulaire de livraison : une API Laravel 13, une SPA React 18 et Reverb pour les notifications en temps réel.
+Plateforme web de gestion des livraisons au Maroc, conçue et développée par [5eef](https://github.com/5eef).
 
-Le parcours principal couvre la création tarifée côté serveur, la prise en charge atomique par un transporteur vérifié, les transitions d’état contrôlées, la remise finale par PIN, le paiement administratif séparé, la notation et le support.
+Le projet réunit une SPA React, une API Laravel sécurisée, une base MySQL et des notifications temps réel. Il couvre le cycle complet d’un colis : création, tarification serveur, prise en charge, suivi, remise par PIN, notation et support.
+
+![Licence MIT](https://img.shields.io/badge/licence-MIT-orange.svg)
+![Laravel 13](https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white)
+![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![Docker](https://img.shields.io/badge/Docker-staging-2496ED?logo=docker&logoColor=white)
+
+## Aperçu du projet
+
+![Landing page de Logistics School](docs/screenshots/landing-page.png)
+
+| Tableau de bord expéditeur | Tableau de bord livreur |
+|---|---|
+| ![Tableau de bord expéditeur](docs/screenshots/sender-dashboard.png) | ![Tableau de bord livreur](docs/screenshots/courier-dashboard.png) |
+
+Ces captures proviennent du staging Docker local avec des comptes et colis strictement fictifs. Pour les régénérer après une démonstration :
+
+```powershell
+Set-Location .\frontend
+npm ci
+Set-Location ..
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\capture-portfolio-screens.ps1
+```
+
+## Pourquoi ce projet
+
+Logistics School démontre la conception d’un produit métier complet, au-delà d’une simple interface CRUD. Les règles sensibles sont contrôlées côté serveur et l’environnement Docker local reproduit une topologie proche de la production avec HTTPS, WebSocket, worker, scheduler, email de test et sauvegardes MySQL.
+
+### Parcours couverts
+
+- **Expéditeur** : créer une expédition, consulter le prix calculé par le serveur et suivre son historique.
+- **Livreur** : passer en ligne, accepter une mission et faire progresser la livraison.
+- **Destinataire** : suivre ses colis, confirmer la réception et noter le transporteur.
+- **Voyageur** : proposer un trajet interville et transporter les colis compatibles.
+- **Administrateur** : modérer les comptes, gérer les paiements et suivre les actions sensibles.
+- **Visiteur** : suivre un colis publiquement sans exposer de donnée personnelle.
+
+## Points techniques
+
+- authentification SPA first-party avec Laravel Sanctum ;
+- cookies `Secure`, session HttpOnly, CSRF et origines explicites ;
+- notifications privées avec Laravel Reverb en WSS et repli par polling ;
+- transitions d’état contrôlées et livraison finale uniquement par PIN ;
+- tarification serveur et création idempotente ;
+- queue et scheduler dédiés ;
+- MySQL 8.4 persistant avec scripts de sauvegarde et restauration testée ;
+- HTTPS local via Caddy et emails capturés par Mailpit ;
+- tests PHPUnit, PHPStan, Pint, Vitest, ESLint et Playwright.
 
 ## Architecture
 
 ```text
-frontend/       React, Vite, Tailwind, Wouter, React Query, Reverb/Echo
-backend-new/    Laravel, Sanctum SPA, Eloquent, queue, Reverb
-scripts/        contrôles non destructifs de préparation production
+Navigateur
+   │ HTTPS / WSS
+   ▼
+Caddy ─────► React / Nginx
+   │
+   ├───────► Laravel / Apache ─────► MySQL
+   │                  │
+   │                  ├────────────► Queue worker
+   │                  ├────────────► Scheduler
+   │                  └────────────► Mailpit
+   └───────► Laravel Reverb
 ```
 
-Le navigateur s’authentifie avec la session first-party de Sanctum : cookie de session HttpOnly, cookie XSRF lisible par le client et requêtes `credentials: include`. Aucun bearer token n’est stocké dans `localStorage`.
+| Couche | Technologies |
+|---|---|
+| Frontend | React 18, Vite, Tailwind CSS, Wouter, React Query, Recharts |
+| Backend | PHP 8.4, Laravel 13, Sanctum, Eloquent, Reverb |
+| Données | MySQL 8.4 |
+| Infrastructure locale | Docker Compose, Caddy, Nginx, Mailpit |
+| Qualité | PHPUnit, PHPStan, Pint, Vitest, ESLint, Playwright |
 
-## Garanties métier importantes
+## Démarrage rapide avec Docker
 
-- Le prix final est calculé par `ShipmentPricingService`; tout champ `price` client est refusé.
-- La création accepte une clé UUID d’idempotence et possède une contrainte unique par expéditeur.
-- L’endpoint général de statut ne peut jamais livrer un colis; seul un PIN correct depuis `out_for_delivery` le peut.
-- Les échecs PIN sont comptés, verrouillés temporairement et limités par utilisateur + colis.
-- Une livraison ne confirme jamais automatiquement le paiement.
-- Le destinataire privé est identifié par `destinataire_id`, lié uniquement à un téléphone vérifié.
-- Un voyageur doit posséder un trajet actif côté serveur correspondant à la route.
-- Les overrides, paiements et actions sensibles de modération sont explicites et audités.
-- Le tracking public utilise une Resource allowlistée sans identifiant interne ni données personnelles.
-
-## Prérequis locaux
-
-- PHP 8.3 ou supérieur avec PDO, SQLite (local), mbstring, OpenSSL, fileinfo et XML;
-- Composer 2;
-- Node.js 24 et npm;
-- Git.
-
-## Installation locale
+Prérequis : Docker Desktop, PowerShell et les ports locaux 80/443 disponibles.
 
 ```powershell
-cd backend-new
-composer install
-Copy-Item .env.example .env
-php artisan key:generate
-if (-not (Test-Path database\database.sqlite)) { New-Item database\database.sqlite -ItemType File }
-php artisan migrate
+git clone --branch deployment-ready https://github.com/5eef/logistics.git logistics-school
+Set-Location .\logistics-school
 
-cd ..\frontend
-npm ci
-Copy-Item .env.example .env
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\init-staging.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-local-hosts.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\staging-up.ps1 -SeedTestData
 ```
 
-Lancer ensuite l’API, le worker, Reverb et Vite dans des terminaux séparés. Le seeder de développement n’injecte des données de démonstration que si `DEMO_SEED=1` est défini explicitement et refuse toujours l’environnement production.
+Services locaux :
 
-## Production-like staging local
+- application : `https://logistics.local` ;
+- API : `https://api.logistics.local` ;
+- boîte email de test : `https://mail.logistics.local`.
 
-Docker Desktop permet de lancer une pile isolée avec MySQL 8.4, images de production, HTTPS/WSS, Mailpit, queue, scheduler, backup et healthchecks :
+La procédure complète, notamment la confiance du certificat local, se trouve dans [docs/STAGING.md](docs/STAGING.md).
+
+## Démonstration manuelle
+
+Le mot de passe aléatoire des comptes fictifs est conservé uniquement dans `.env.staging` :
 
 ```powershell
-.\scripts\init-staging.ps1
-.\scripts\install-local-hosts.ps1
-.\scripts\staging-up.ps1 -SeedTestData
-.\scripts\preflight.ps1 -Environment staging -RequireRunning -SkipTests
-.\scripts\smoke-test.ps1
+Select-String "^STAGING_TEST_PASSWORD=" .env.staging
 ```
 
-Voir `docs/STAGING.md` avant le premier lancement. `.env.staging`, les certificats et les dumps sont ignorés par Git. Google Cloud / Google Console is NOT required; Azure n’est pas requis. Le mail utilise SMTP standard et la vérification téléphone reste désactivée tant qu’un provider supporté n’est pas configuré.
+| Rôle | Compte fictif |
+|---|---|
+| Expéditeur | `staging.sender@example.test` |
+| Livreur | `staging.courier@example.test` |
+| Destinataire | `staging.recipient@example.test` |
+| Voyageur | `staging.traveler@example.test` |
+| Administrateur | `staging.admin@example.test` |
 
-## Qualité
+Scénario conseillé : créer un colis comme expéditeur, le prendre comme livreur dans une fenêtre privée, progresser jusqu’à la remise par PIN, puis le noter comme destinataire.
 
-Backend :
+## Validation
 
 ```powershell
-cd backend-new
-composer validate --strict
-composer audit --locked
-composer lint
-composer analyse
-php artisan test
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\preflight.ps1 -Environment staging -RequireRunning -SkipTests
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-staging-e2e.ps1
 ```
 
-Frontend :
+Le smoke test vérifie HTTPS, CSRF, authentification, mutation protégée, MySQL, WSS et déconnexion. Le parcours Playwright valide le cycle métier réel jusqu’au PIN et à la notation.
 
-```powershell
-cd frontend
-npm audit --audit-level=high
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm run test:e2e
+## Structure
+
+```text
+frontend/       SPA React et tests navigateur
+backend-new/    API Laravel, règles métier et tests
+docker/         reverse proxy et modèles TLS
+scripts/        exploitation, validation, backup et restauration
+docs/           staging, opérations, audit et captures portfolio
 ```
 
-Le contrôle production complet est disponible via :
+## Statut
 
-```powershell
-.\scripts\preflight.ps1 -Environment production
-```
+- **Code ready** : oui.
+- **Staging local production-like** : oui.
+- **Production distante** : non déployée ; les domaines publics, le TLS public, le SMTP réel, l’observabilité et les sauvegardes hors hôte restent à fournir.
 
-Ce script ne déploie rien, ne modifie pas `.env` et n’exécute aucune migration.
+## Auteur
 
-## Documentation
+**5eef** — [github.com/5eef](https://github.com/5eef)
 
-- [PRODUCTION.md](PRODUCTION.md) : prérequis d’une infrastructure réelle et rollback.
-- [docs/STAGING.md](docs/STAGING.md) : lancement et validation du staging Docker local.
-- [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) : dump, rétention et preuve de restauration.
-- [docs/OPERATIONS.md](docs/OPERATIONS.md) : statut, logs, incidents, queue et scheduler.
-- [docs/STAGING_VALIDATION_REPORT.md](docs/STAGING_VALIDATION_REPORT.md) : preuves et verdicts séparés.
-- [README_SOUTENANCE.md](README_SOUTENANCE.md) : démonstration locale.
-- `docs/FINAL_PRODUCTION_AUDIT.md` : état initial, corrections, résultats réels et bloqueurs restants.
+## Licence
+
+Distribué sous licence [MIT](LICENSE). Copyright © 2026 5eef.

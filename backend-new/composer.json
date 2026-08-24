@@ -2,8 +2,15 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "laravel/laravel",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Secure delivery management platform for Morocco.",
+    "keywords": ["laravel", "react", "logistics", "delivery", "reverb"],
+    "authors": [
+        {
+            "name": "5eef",
+            "homepage": "https://github.com/5eef",
+            "role": "Developer"
+        }
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.3",

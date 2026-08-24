@@ -21,6 +21,7 @@ describe("Home", () => {
     const user = userEvent.setup();
 
     render(<Home />);
+    expect(screen.getByRole("link", { name: "5eef" })).toHaveAttribute("href", "https://github.com/5eef");
     await user.type(screen.getByRole("textbox"), "log2024abc");
     await user.click(screen.getByRole("button", { name: "SUIVRE" }));
 
