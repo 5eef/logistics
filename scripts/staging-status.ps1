@@ -22,10 +22,10 @@ function Test-Url {
 Write-Host ("Backend health: {0}" -f $(if (Test-Url 'api.logistics.local' '/api/health') { 'UP' } else { 'DOWN' }))
 Write-Host ("Frontend health: {0}" -f $(if (Test-Url 'logistics.local' '/') { 'UP' } else { 'DOWN' }))
 
-$mysqlOk = docker compose --env-file $envPath -f $composeFile exec -T mysql sh -c 'mysqladmin ping --silent --host=127.0.0.1 --user="$MYSQL_USER" --password="$MYSQL_PASSWORD"' 2>$null
+$mysqlOk = docker compose --env-file $envPath -f $composeFile exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysqladmin ping --silent --host=127.0.0.1 --user="$MYSQL_USER"'
 Write-Host ("MySQL health: {0}" -f $(if ($LASTEXITCODE -eq 0) { 'UP' } else { 'DOWN' }))
 
-$reverbOk = docker compose --env-file $envPath -f $composeFile exec -T reverb php -r '$s=@fsockopen("127.0.0.1",8080,$e,$m,2);exit($s?0:1);' 2>$null
+$reverbOk = docker compose --env-file $envPath -f $composeFile exec -T reverb curl --silent --output /dev/null --max-time 2 http://127.0.0.1:8080
 Write-Host ("Reverb health: {0}" -f $(if ($LASTEXITCODE -eq 0) { 'UP' } else { 'DOWN' }))
 
 $failedJobs = docker compose --env-file $envPath -f $composeFile exec -T backend php artisan queue:failed --no-ansi 2>$null
