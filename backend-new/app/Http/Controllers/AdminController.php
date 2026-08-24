@@ -101,32 +101,52 @@ class AdminController extends Controller
         return TicketResource::collection($query->latest()->paginate($data['per_page'] ?? 20));
     }
 
-    public function updateTicket(Request $request, int $id): TicketResource
+    public function updateTicket(Request $request, int $id, AuditLogger $audit): TicketResource
     {
         $validated = $request->validate([
-            'status' => ['sometimes', 'required', 'in:open,in_progress,resolved,closed'],
-            'response' => ['nullable', 'string', 'max:5000'],
+            'status' => ['nullable', 'required_without:response', 'in:open,in_progress,resolved,closed'],
+            'response' => ['nullable', 'required_without:status', 'string', 'regex:/\S/', 'max:5000'],
         ]);
-        $ticket = Ticket::findOrFail($id);
-        if (isset($validated['status'])) {
-            $ticket->status = $validated['status'];
-        }
-        $ticket->save();
-        if (! empty($validated['response'])) {
-            $ticket->responses()->create(['user_id' => $request->user()->id, 'user_name' => 'Support Admin', 'message' => $validated['response']]);
-            Notification::create([
-                'user_id' => $ticket->user_id, 'title' => 'Réponse à votre ticket',
-                'message' => "Le support a répondu à votre ticket : {$ticket->subject}", 'type' => 'info',
-            ]);
-        }
+        $ticket = DB::transaction(function () use ($request, $id, $validated, $audit) {
+            $ticket = Ticket::whereKey($id)->lockForUpdate()->firstOrFail();
+            $old = ['status' => $ticket->status, 'responses_count' => $ticket->responses()->count()];
+            if (isset($validated['status'])) {
+                $ticket->status = $validated['status'];
+                $ticket->save();
+            }
+            if (! empty($validated['response'])) {
+                $ticket->responses()->create([
+                    'user_id' => $request->user()->id,
+                    'user_name' => $request->user()->name,
+                    'message' => $validated['response'],
+                ]);
+                Notification::create([
+                    'user_id' => $ticket->user_id, 'title' => 'Réponse à votre ticket',
+                    'message' => "Le support a répondu à votre ticket : {$ticket->subject}", 'type' => 'info',
+                ]);
+            }
+            $audit->record(
+                $request->user(),
+                'ticket.updated',
+                $ticket,
+                ! empty($validated['response']) ? 'Réponse du support' : 'Changement de statut du ticket',
+                $old,
+                ['status' => $ticket->status, 'responses_count' => $ticket->responses()->count()]
+            );
+
+            return $ticket;
+        });
 
         return new TicketResource($ticket->load('responses'));
     }
 
     public function pendingCouriers(Request $request)
     {
-        $request->validate(['per_page' => ['nullable', 'integer', 'min:1', 'max:100']]);
-        $items = User::whereIn('role', ['livreur', 'voyageur'])->where('verification_status', 'pending')->latest()->paginate($request->integer('per_page', 20));
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+        $items = User::whereIn('role', ['livreur', 'voyageur'])->where('verification_status', 'pending')->latest()->paginate($validated['per_page'] ?? 20);
 
         return AdminUserResource::collection($items);
     }
@@ -137,23 +157,30 @@ class AdminController extends Controller
             'status' => ['required', 'in:approved,rejected'],
             'reason' => ['nullable', 'required_if:status,rejected', 'string', 'min:3', 'max:500'],
         ]);
-        $user = User::whereIn('role', ['livreur', 'voyageur'])->findOrFail($id);
-        $old = $user->only(['verification_status', 'is_verified', 'verified_at', 'verified_by', 'verification_reason']);
         $reason = $validated['reason'] ?? 'Informations de vérification approuvées';
-        $new = [
-            'verification_status' => $validated['status'], 'is_verified' => $validated['status'] === 'approved',
-            'verified_at' => $validated['status'] === 'approved' ? now() : null,
-            'verified_by' => $request->user()->id, 'verification_reason' => $reason,
-        ];
-        DB::transaction(function () use ($user, $new, $request, $audit, $old, $reason) {
+        $user = DB::transaction(function () use ($id, $validated, $request, $audit, $reason) {
+            $user = User::whereIn('role', ['livreur', 'voyageur'])->whereKey($id)->lockForUpdate()->firstOrFail();
+            $old = $user->only(['verification_status', 'is_verified', 'is_online', 'verified_at', 'verified_by', 'verification_reason']);
+            $approved = $validated['status'] === 'approved';
+            $new = [
+                'verification_status' => $validated['status'], 'is_verified' => $approved,
+                'is_online' => $approved ? $user->is_online : false,
+                'verified_at' => $approved ? now() : null,
+                'verified_by' => $request->user()->id, 'verification_reason' => $reason,
+            ];
             $user->update($new);
             $audit->record($request->user(), 'courier.verification.'.$new['verification_status'], $user, $reason, $old, $new);
+            Notification::create([
+                'user_id' => $user->id, 'title' => $approved ? 'Compte approuvé !' : 'Vérification rejetée',
+                'message' => $approved ? 'Vos informations ont été approuvées.' : 'Votre demande a été rejetée. Raison : '.$reason,
+                'type' => $approved ? 'success' : 'error',
+            ]);
+
+            return $user;
         });
-        Notification::create([
-            'user_id' => $user->id, 'title' => $validated['status'] === 'approved' ? 'Compte approuvé !' : 'Vérification rejetée',
-            'message' => $validated['status'] === 'approved' ? 'Vos informations ont été approuvées.' : 'Votre demande a été rejetée. Raison : '.$reason,
-            'type' => $validated['status'] === 'approved' ? 'success' : 'error',
-        ]);
+        if ($validated['status'] === 'rejected') {
+            $this->revokeSessions($user);
+        }
 
         return new AdminUserResource($user->fresh());
     }
@@ -161,9 +188,9 @@ class AdminController extends Controller
     public function warnCourier(Request $request, int $id, AuditLogger $audit): AdminUserResource
     {
         $validated = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
-        $user = User::whereIn('role', ['livreur', 'voyageur'])->findOrFail($id);
-        $old = $user->only(['warnings', 'suspended_until', 'is_banned']);
-        DB::transaction(function () use ($user, $request, $validated, $audit, $old) {
+        $user = DB::transaction(function () use ($id, $request, $validated, $audit) {
+            $user = User::whereIn('role', ['livreur', 'voyageur'])->whereKey($id)->lockForUpdate()->firstOrFail();
+            $old = $user->only(['warnings', 'suspended_until', 'is_banned', 'is_online']);
             $user->warnings++;
             if ($user->warnings === 2) {
                 $user->suspended_until = now()->addDays(3);
@@ -171,17 +198,20 @@ class AdminController extends Controller
                 $user->suspended_until = now()->addDays(14);
             } elseif ($user->warnings >= 4) {
                 $user->is_banned = true;
+                $user->is_online = false;
             }
             $user->save();
-            $audit->record($request->user(), 'courier.warned', $user, $validated['reason'], $old, $user->only(['warnings', 'suspended_until', 'is_banned']));
+            $audit->record($request->user(), 'courier.warned', $user, $validated['reason'], $old, $user->only(['warnings', 'suspended_until', 'is_banned', 'is_online']));
+            Notification::create([
+                'user_id' => $user->id, 'title' => 'Avertissement reçu',
+                'message' => "Vous avez reçu un avertissement ({$user->warnings}/4). Raison : {$validated['reason']}", 'type' => 'warning',
+            ]);
+
+            return $user;
         });
         if ($user->suspended_until?->isFuture() || $user->is_banned) {
             $this->revokeSessions($user);
         }
-        Notification::create([
-            'user_id' => $user->id, 'title' => 'Avertissement reçu',
-            'message' => "Vous avez reçu un avertissement ({$user->warnings}/4). Raison : {$validated['reason']}", 'type' => 'warning',
-        ]);
 
         return new AdminUserResource($user->fresh());
     }
@@ -189,11 +219,13 @@ class AdminController extends Controller
     public function banCourier(Request $request, int $id, AuditLogger $audit): AdminUserResource
     {
         $validated = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
-        $user = User::whereIn('role', ['livreur', 'voyageur'])->findOrFail($id);
-        $old = $user->only(['is_banned']);
-        DB::transaction(function () use ($user, $request, $validated, $audit, $old) {
+        $user = DB::transaction(function () use ($id, $request, $validated, $audit) {
+            $user = User::whereIn('role', ['livreur', 'voyageur'])->whereKey($id)->lockForUpdate()->firstOrFail();
+            $old = $user->only(['is_banned', 'is_online']);
             $user->update(['is_banned' => true, 'is_online' => false]);
-            $audit->record($request->user(), 'courier.banned', $user, $validated['reason'], $old, ['is_banned' => true]);
+            $audit->record($request->user(), 'courier.banned', $user, $validated['reason'], $old, ['is_banned' => true, 'is_online' => false]);
+
+            return $user;
         });
         $this->revokeSessions($user);
 

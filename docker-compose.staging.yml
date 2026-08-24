@@ -217,7 +217,9 @@ services:
       - no-new-privileges:true
     mem_limit: 128m
     cpus: 0.5
-    pids_limit: 128
+    # Caddy's Go runtime can use more than 120 threads under browser/WebSocket load.
+    # Keep enough headroom for Docker to start the healthcheck process.
+    pids_limit: 256
 
 volumes:
   mysql-data:

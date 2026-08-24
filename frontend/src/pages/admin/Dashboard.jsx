@@ -29,8 +29,8 @@ export default function AdminDashboard() {
   const [selectedCourier, setSelectedCourier] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [ticketReply, setTicketReply] = useState("");
-  const [rejReason, setRejReason] = useState("");
-  const [warnReason, setWarnReason] = useState("");
+  const [actionReason, setActionReason] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [pages, setPages] = useState({ users: null, couriers: null, tickets: null, colis: null });
 
@@ -59,39 +59,65 @@ export default function AdminDashboard() {
   }, [user, navigate, loadAll]);
 
   const verifyCourier = async (id, status) => {
+    const reason = actionReason.trim();
+    if (status === "rejected" && reason.length < 3) {
+      setPageError("Le motif du rejet doit contenir au moins 3 caractères.");
+      return;
+    }
+    setActionLoading(true);
     try {
-      await api.admin.verifyCourier(id, status, rejReason);
+      await api.admin.verifyCourier(id, status, status === "rejected" ? reason : undefined);
       setSelectedCourier(null);
-      setRejReason("");
-      loadAll();
+      setActionReason("");
+      await loadAll();
     } catch (e) { setPageError(e.message); }
+    finally { setActionLoading(false); }
   };
 
   const warnCourier = async (id) => {
+    const reason = actionReason.trim();
+    if (reason.length < 3) {
+      setPageError("Le motif de l’avertissement doit contenir au moins 3 caractères.");
+      return;
+    }
+    setActionLoading(true);
     try {
-      await api.admin.warnCourier(id, warnReason);
-      setWarnReason("");
-      loadAll();
+      await api.admin.warnCourier(id, reason);
+      setSelectedCourier(null);
+      setActionReason("");
+      await loadAll();
     } catch (e) { setPageError(e.message); }
+    finally { setActionLoading(false); }
   };
 
   const banCourier = async (id) => {
-    const reason = window.prompt("Motif obligatoire du bannissement :");
-    if (!reason?.trim()) return;
-    if (!confirm("Bannir définitivement cet utilisateur?")) return;
+    const reason = actionReason.trim();
+    if (reason.length < 3) {
+      setPageError("Le motif du bannissement doit contenir au moins 3 caractères.");
+      return;
+    }
+    if (!window.confirm("Bannir définitivement cet utilisateur ?")) return;
+    setActionLoading(true);
     try {
-      await api.admin.banCourier(id, reason.trim());
-      loadAll();
+      await api.admin.banCourier(id, reason);
+      setSelectedCourier(null);
+      setActionReason("");
+      await loadAll();
     } catch (e) { setPageError(e.message); }
+    finally { setActionLoading(false); }
   };
 
   const replyTicket = async (id) => {
+    const response = ticketReply.trim();
+    if (!response) return;
+    setActionLoading(true);
     try {
-      await api.admin.replyTicket(id, "resolved", ticketReply);
+      await api.admin.replyTicket(id, "resolved", response);
       setSelectedTicket(null);
       setTicketReply("");
-      loadAll();
+      await loadAll();
     } catch (e) { setPageError(e.message); }
+    finally { setActionLoading(false); }
   };
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><RefreshCw className="animate-spin text-blue-500" size={32} /></div>;
@@ -220,10 +246,10 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div className="px-5 pb-5 flex gap-2">
-                      <button onClick={() => verifyCourier(c.id, "approved")} className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1">
+                      <button disabled={actionLoading} onClick={() => verifyCourier(c.id, "approved")} className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1 disabled:opacity-50">
                         <CheckCircle size={16} /> Approuver
                       </button>
-                      <button onClick={() => { setSelectedCourier(c); }} className="flex-1 py-2.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-xl text-sm font-semibold flex items-center justify-center gap-1">
+                      <button disabled={actionLoading} onClick={() => { setSelectedCourier(c); setActionReason(""); }} className="flex-1 py-2.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-xl text-sm font-semibold flex items-center justify-center gap-1 disabled:opacity-50">
                         <XCircle size={16} /> Rejeter
                       </button>
                     </div>
@@ -284,8 +310,8 @@ export default function AdminDashboard() {
                         <div className="flex gap-1">
                           {(u.role === "livreur" || u.role === "voyageur") && !u.isBanned && (
                             <>
-                              <button onClick={() => { setSelectedCourier(u); setWarnReason(""); }} title="Avertir" className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-lg"><AlertTriangle size={14} /></button>
-                              <button onClick={() => banCourier(u.id)} title="Bannir" className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"><Ban size={14} /></button>
+                            <button onClick={() => { setSelectedCourier(u); setActionReason(""); }} title="Avertir" className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-lg"><AlertTriangle size={14} /></button>
+                              <button onClick={() => { setSelectedCourier(u); setActionReason(""); }} title="Bannir" className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"><Ban size={14} /></button>
                             </>
                           )}
                         </div>
@@ -373,7 +399,7 @@ export default function AdminDashboard() {
       </div>
 
       {selectedCourier && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedCourier(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { if (!actionLoading) { setSelectedCourier(null); setActionReason(""); } }}>
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-gray-800 mb-4">Action sur {selectedCourier.name}</h3>
             <div className="space-y-3">
@@ -381,8 +407,8 @@ export default function AdminDashboard() {
                 <label htmlFor="courier-action-reason" className="block text-xs font-semibold text-gray-600 mb-1.5">Raison / Motif</label>
                 <textarea
                   id="courier-action-reason"
-                  value={rejReason || warnReason}
-                  onChange={(e) => { setRejReason(e.target.value); setWarnReason(e.target.value); }}
+                  value={actionReason}
+                  onChange={(e) => setActionReason(e.target.value)}
                   rows={3}
                   className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:border-blue-500 focus:outline-none"
                   placeholder="Indiquez la raison..."
@@ -391,17 +417,17 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-2 gap-2">
                 {selectedCourier.verificationStatus === "pending" ? (
                   <>
-                    <button onClick={() => verifyCourier(selectedCourier.id, "approved")} className="py-2.5 bg-green-500 text-white rounded-xl text-sm font-semibold hover:bg-green-600">Approuver</button>
-                    <button onClick={() => verifyCourier(selectedCourier.id, "rejected")} className="py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">Rejeter</button>
+                    <button disabled={actionLoading} onClick={() => verifyCourier(selectedCourier.id, "approved")} className="py-2.5 bg-green-500 text-white rounded-xl text-sm font-semibold hover:bg-green-600 disabled:opacity-50">Approuver</button>
+                    <button disabled={actionLoading || actionReason.trim().length < 3} onClick={() => verifyCourier(selectedCourier.id, "rejected")} className="py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 disabled:opacity-50">Rejeter</button>
                   </>
                 ) : (
                   <>
-                    <button onClick={() => warnCourier(selectedCourier.id)} className="py-2.5 bg-yellow-400 hover:bg-yellow-500 text-white rounded-xl text-sm font-semibold">Avertir</button>
-                    <button onClick={() => { banCourier(selectedCourier.id); setSelectedCourier(null); }} className="py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">Bannir</button>
+                    <button disabled={actionLoading || actionReason.trim().length < 3} onClick={() => warnCourier(selectedCourier.id)} className="py-2.5 bg-yellow-400 hover:bg-yellow-500 text-white rounded-xl text-sm font-semibold disabled:opacity-50">Avertir</button>
+                    <button disabled={actionLoading || actionReason.trim().length < 3} onClick={() => banCourier(selectedCourier.id)} className="py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 disabled:opacity-50">Bannir</button>
                   </>
                 )}
               </div>
-              <button onClick={() => setSelectedCourier(null)} className="w-full py-2 border-2 border-gray-200 rounded-xl text-sm text-gray-600">Annuler</button>
+              <button disabled={actionLoading} onClick={() => { setSelectedCourier(null); setActionReason(""); }} className="w-full py-2 border-2 border-gray-200 rounded-xl text-sm text-gray-600 disabled:opacity-50">Annuler</button>
             </div>
           </div>
         </div>
@@ -431,8 +457,8 @@ export default function AdminDashboard() {
                 className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:border-blue-500 focus:outline-none mb-3"
               />
               <div className="flex gap-2">
-                <button onClick={() => setSelectedTicket(null)} className="flex-1 py-2.5 border-2 border-gray-200 rounded-xl text-sm">Annuler</button>
-                <button onClick={() => replyTicket(selectedTicket.id)} disabled={!ticketReply} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50">Répondre & Résoudre</button>
+                <button disabled={actionLoading} onClick={() => setSelectedTicket(null)} className="flex-1 py-2.5 border-2 border-gray-200 rounded-xl text-sm disabled:opacity-50">Annuler</button>
+                <button onClick={() => replyTicket(selectedTicket.id)} disabled={actionLoading || !ticketReply.trim()} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50">Répondre & Résoudre</button>
               </div>
             </div>
           </div>

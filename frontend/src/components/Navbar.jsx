@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
@@ -15,6 +15,8 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationError, setNotificationError] = useState(false);
   const [notificationMeta, setNotificationMeta] = useState(null);
+  const notificationsRef = useRef(null);
+  const userMenuRef = useRef(null);
   const userId = user?.id;
 
   const refreshNotifications = useCallback((pageNumber = 1) => {
@@ -33,6 +35,20 @@ export default function Navbar() {
     };
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
+  }, []);
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotifs(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
   }, []);
 
   useEffect(() => {
@@ -99,8 +115,14 @@ export default function Navbar() {
   };
 
   const markRead = async (id) => {
-    await api.auth.readNotification(id);
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    try {
+      await api.auth.readNotification(id);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+      setShowNotifs(false);
+      setNotificationError(false);
+    } catch {
+      setNotificationError(true);
+    }
   };
 
   const openProfile = () => {
@@ -134,7 +156,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             {user ? (
               <>
-                <div className="relative hidden md:block">
+                <div ref={notificationsRef} className="relative hidden md:block">
                   <button
                     onClick={() => { setShowNotifs(!showNotifs); setShowMenu(false); }}
                     className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
@@ -180,7 +202,7 @@ export default function Navbar() {
                   )}
                 </div>
 
-                <div className="relative hidden md:block">
+                <div ref={userMenuRef} className="relative hidden md:block">
                   <button
                     onClick={() => { setShowMenu(!showMenu); setShowNotifs(false); }}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"

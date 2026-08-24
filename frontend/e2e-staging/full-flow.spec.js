@@ -120,6 +120,8 @@ test("real MySQL staging covers registration, shipment lifecycle, PIN, rating, r
 
     await senderPage.getByRole("button", { name: "Ouvrir les notifications" }).click();
     await expect(senderPage.getByText(new RegExp(shipment.tracking_id))).toBeVisible({ timeout: 10_000 });
+    await senderPage.getByRole("heading", { name: /Bonjour/ }).click();
+    await expect(senderPage.locator("#desktop-notifications")).toBeHidden();
 
     const claim = await mutate(courierContext, "PATCH", `/api/colis/${shipment.id}/status`, { status: "picked_up" });
     expect(claim.status()).toBe(200);
@@ -163,5 +165,32 @@ test("real MySQL staging covers registration, shipment lifecycle, PIN, rating, r
     }
   } finally {
     await Promise.all([senderContext.close(), courierContext.close(), recipientContext.close()]);
+  }
+});
+
+test("administrator dashboard loads and requires a moderation reason", async ({ browser }) => {
+  expect(password, "STAGING_TEST_PASSWORD must be supplied by the runner").toBeTruthy();
+  const adminContext = await browser.newContext({ ignoreHTTPSErrors: true });
+
+  try {
+    const admin = await login(adminContext, "staging.admin@example.test");
+    expect(admin.role).toBe("admin");
+
+    const page = await adminContext.newPage();
+    await page.goto("/admin");
+    await expect(page.getByRole("heading", { name: "Tableau de Bord Administrateur" })).toBeVisible();
+    await page.getByRole("button", { name: "Utilisateurs" }).click();
+    await expect(page.getByText(/Tous les Utilisateurs/)).toBeVisible();
+
+    await page.getByTitle("Avertir").first().click();
+    const modal = page.locator("div.fixed").filter({ hasText: "Action sur" });
+    const warnButton = modal.getByRole("button", { name: "Avertir" });
+    await expect(warnButton).toBeDisabled();
+    await modal.getByLabel("Raison / Motif").fill("Incident vérifié");
+    await expect(warnButton).toBeEnabled();
+    await modal.getByRole("button", { name: "Annuler" }).click();
+    await expect(modal).toBeHidden();
+  } finally {
+    await adminContext.close();
   }
 });

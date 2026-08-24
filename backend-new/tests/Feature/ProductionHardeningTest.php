@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\Colis;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -216,6 +217,54 @@ class ProductionHardeningTest extends TestCase
         $this->assertSame($admin->id, $fresh->verified_by);
         $this->assertTrue($fresh->is_banned);
         $this->assertSame(3, AuditLog::query()->where('target_id', $courier->id)->count());
+    }
+
+    public function test_admin_rejection_and_fourth_warning_take_carriers_offline(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $rejected = User::factory()->create([
+            'role' => 'livreur', 'verification_status' => 'approved', 'is_verified' => true, 'is_online' => true,
+        ]);
+        $warned = User::factory()->create([
+            'role' => 'voyageur', 'verification_status' => 'approved', 'is_verified' => true,
+            'is_online' => true, 'warnings' => 3,
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/couriers/{$rejected->id}/verify", [
+            'status' => 'rejected', 'reason' => 'Documents non conformes',
+        ])->assertOk();
+        $this->postJson("/api/admin/couriers/{$warned->id}/warn", [
+            'reason' => 'Quatrième incident documenté',
+        ])->assertOk();
+
+        $this->assertFalse($rejected->fresh()->is_online);
+        $this->assertFalse($warned->fresh()->is_online);
+        $this->assertTrue($warned->fresh()->is_banned);
+        $this->assertDatabaseHas('notifications', ['user_id' => $rejected->id, 'type' => 'error']);
+        $this->assertDatabaseHas('notifications', ['user_id' => $warned->id, 'type' => 'warning']);
+    }
+
+    public function test_admin_ticket_response_is_atomic_notified_and_audited(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $owner = User::factory()->create(['role' => 'expediteur']);
+        $ticket = Ticket::create([
+            'user_id' => $owner->id, 'subject' => 'Colis bloqué', 'message' => 'Besoin d’aide',
+            'status' => 'open', 'priority' => 'high',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/tickets/{$ticket->id}", [
+            'status' => 'resolved', 'response' => 'Le dossier a été corrigé.',
+        ])->assertOk()->assertJsonPath('status', 'resolved')
+            ->assertJsonPath('responses.0.user_name', $admin->name);
+
+        $this->assertDatabaseHas('notifications', ['user_id' => $owner->id, 'type' => 'info']);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_user_id' => $admin->id, 'action' => 'ticket.updated', 'target_id' => $ticket->id,
+        ]);
+        $this->patchJson("/api/admin/tickets/{$ticket->id}", [])->assertUnprocessable();
     }
 
     public function test_duplicate_rating_returns_conflict_and_keeps_one_aggregate(): void
