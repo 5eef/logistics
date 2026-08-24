@@ -48,7 +48,21 @@ npm ci
 Copy-Item .env.example .env
 ```
 
-Lancer ensuite l’API, le worker, Reverb et Vite dans des terminaux séparés, ou utiliser `LANCER_SITE.bat`. Le script local n’injecte des données de démonstration que si `DEMO_SEED=1` est défini explicitement; le seeder refuse toujours l’environnement production.
+Lancer ensuite l’API, le worker, Reverb et Vite dans des terminaux séparés. Le seeder de développement n’injecte des données de démonstration que si `DEMO_SEED=1` est défini explicitement et refuse toujours l’environnement production.
+
+## Production-like staging local
+
+Docker Desktop permet de lancer une pile isolée avec MySQL 8.4, images de production, HTTPS/WSS, Mailpit, queue, scheduler, backup et healthchecks :
+
+```powershell
+.\scripts\init-staging.ps1
+.\scripts\install-local-hosts.ps1
+.\scripts\staging-up.ps1 -SeedTestData
+.\scripts\preflight.ps1 -Environment staging -RequireRunning -SkipTests
+.\scripts\smoke-test.ps1
+```
+
+Voir `docs/STAGING.md` avant le premier lancement. `.env.staging`, les certificats et les dumps sont ignorés par Git. Google Cloud / Google Console is NOT required; Azure n’est pas requis. Le mail utilise SMTP standard et la vérification téléphone reste désactivée tant qu’un provider supporté n’est pas configuré.
 
 ## Qualité
 
@@ -78,13 +92,17 @@ npm run test:e2e
 Le contrôle production complet est disponible via :
 
 ```powershell
-.\scripts\preflight.ps1
+.\scripts\preflight.ps1 -Environment production
 ```
 
 Ce script ne déploie rien, ne modifie pas `.env` et n’exécute aucune migration.
 
 ## Documentation
 
-- [PRODUCTION.md](PRODUCTION.md) : configuration générique, processus, sauvegarde et rollback.
+- [PRODUCTION.md](PRODUCTION.md) : prérequis d’une infrastructure réelle et rollback.
+- [docs/STAGING.md](docs/STAGING.md) : lancement et validation du staging Docker local.
+- [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) : dump, rétention et preuve de restauration.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) : statut, logs, incidents, queue et scheduler.
+- [docs/STAGING_VALIDATION_REPORT.md](docs/STAGING_VALIDATION_REPORT.md) : preuves et verdicts séparés.
 - [README_SOUTENANCE.md](README_SOUTENANCE.md) : démonstration locale.
 - `docs/FINAL_PRODUCTION_AUDIT.md` : état initial, corrections, résultats réels et bloqueurs restants.

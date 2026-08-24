@@ -1,6 +1,8 @@
 # Guide de préparation production
 
-Ce document décrit une infrastructure générique. Il ne lance aucun déploiement.
+Ce document décrit une infrastructure générique. Il ne lance aucun déploiement. Le staging reproductible validé localement est documenté dans `docs/STAGING.md`; il ne constitue pas une validation d’infrastructure distante.
+
+Google Cloud / Google Console is NOT required. Aucun compte Azure n’est requis. Le mail utilise le SMTP standard Laravel et reste configurable par variables pour tout fournisseur compatible.
 
 ## Topologie recommandée
 
@@ -42,10 +44,11 @@ Partir de `backend-new/.env.production.example`. Les valeurs suivantes sont obli
 | `SESSION_SAME_SITE` | `lax`, sauf architecture inter-sites justifiée |
 | `DB_*` | compte MySQL dédié avec privilèges minimaux |
 | `QUEUE_CONNECTION` | `database` ou Redis |
-| `MAIL_*` | véritable fournisseur SMTP/API |
+| `MAIL_*` | véritable fournisseur SMTP standard, configurable sans changement de code |
 | `PHONE_VERIFICATION_ENABLED` | `false` tant qu’un provider SMS production réel n’est pas branché |
 | `PHONE_VERIFICATION_DRIVER` | jamais `local` en production ; `fail_closed` uniquement si la fonctionnalité est désactivée |
-| `REVERB_*` | identifiants uniques, origins explicites, TLS |
+| `REVERB_*` | identifiants uniques, origins hôte explicites, cible publique TLS et cible interne séparée |
+| `BACKUP_*` | chemin persistant privé, rétention et copie hors hôte |
 
 Ne jamais journaliser ou afficher `APP_KEY`, mots de passe, cookies, XSRF, bearer tokens historiques, PIN ou secret Reverb.
 
@@ -74,7 +77,7 @@ php artisan schedule:run
 
 Le scheduler est déclenché chaque minute par le système. Les workers et Reverb doivent redémarrer automatiquement, recevoir un arrêt gracieux et exposer leurs erreurs aux alertes.
 
-Le proxy WebSocket doit transmettre `Upgrade`, `Connection`, l’hôte et l’adresse cliente de confiance. Les origins Reverb doivent correspondre exactement au frontend.
+Le proxy WebSocket doit transmettre `Upgrade`, `Connection`, l’hôte et l’adresse cliente de confiance. `REVERB_HOST/PORT/SCHEME` décrivent l’endpoint public, tandis que `REVERB_INTERNAL_*` décrit la cible serveur-à-serveur privée. Les `REVERB_ALLOWED_ORIGINS` sont des noms d’hôte sans schéma et doivent correspondre exactement au frontend.
 
 ## Headers et CORS
 

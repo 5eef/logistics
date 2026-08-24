@@ -3,8 +3,19 @@
 .env.*
 !.env.example
 !.env.production.example
+!.env.staging.example
+!backend-new/.env.staging.example
+!frontend/.env.staging.example
 backend-new/.env
+backend-new/.env.staging
 frontend/.env
+frontend/.env.staging
+
+# Certificats TLS locaux et sauvegardes reelles
+.docker/tls/*
+!.docker/tls/.gitignore
+backups/mysql/*
+!backups/mysql/.gitignore
 
 # Dépendances
 backend-new/vendor/

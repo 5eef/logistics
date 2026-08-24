@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.staging.example
+.git
+.github
+node_modules
+dist
+coverage
+test-results
+playwright-report
+e2e
+*.log

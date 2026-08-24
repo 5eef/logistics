@@ -3,19 +3,20 @@
 ## Lancement
 
 ```powershell
-.\LANCER_SITE.bat
+.\scripts\init-staging.ps1
+.\scripts\staging-up.ps1 -SeedTestData
 ```
 
-Le script vérifie PHP, Composer, Node et npm, installe les dépendances de développement, applique uniquement les migrations en attente sur la base locale et démarre l’API, la queue, Reverb et Vite.
+Ces scripts préparent l’environnement puis démarrent l’application complète avec Docker Compose : API, frontend, MySQL, Redis, queue, scheduler, Reverb, Caddy et Mailpit.
 
-Pour injecter volontairement les données de démonstration dans un environnement non-production :
+Pour vérifier l’état des services :
 
 ```powershell
-$env:DEMO_SEED = '1'
-.\LANCER_SITE.bat
+.\scripts\staging-status.ps1
+.\scripts\smoke-test.ps1
 ```
 
-Le seeder refuse `APP_ENV=production`. Le script n’affiche aucun mot de passe de démonstration.
+Le seeder de staging refuse `APP_ENV=production`. Les secrets locaux restent dans `.env.staging`, qui n’est pas versionné.
 
 ## Vérifications avant présentation
 

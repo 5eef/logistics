@@ -18,9 +18,26 @@ export function subscribeToUserNotifications({ userId, onNotification, onConnect
     wssPort: Number(import.meta.env.VITE_REVERB_PORT || 443),
     forceTLS: (import.meta.env.VITE_REVERB_SCHEME || "https") === "https",
     enabledTransports: ["ws", "wss"],
-    authEndpoint: broadcastAuthUrl,
-    withCredentials: true,
-    auth: { headers: { Accept: "application/json", ...csrfHeaders() } },
+    channelAuthorization: {
+      customHandler: async ({ socketId, channelName }, callback) => {
+        try {
+          const response = await fetch(broadcastAuthUrl, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/x-www-form-urlencoded",
+              ...csrfHeaders(),
+            },
+            body: new URLSearchParams({ socket_id: socketId, channel_name: channelName }),
+          });
+          if (!response.ok) throw new Error(`Broadcast authorization failed (${response.status})`);
+          callback(null, await response.json());
+        } catch (error) {
+          callback(error, null);
+        }
+      },
+    },
   });
 
   const connection = echo.connector?.pusher?.connection;

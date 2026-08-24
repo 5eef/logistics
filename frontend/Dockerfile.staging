@@ -1,0 +1,29 @@
+FROM node:24.13.0-alpine AS build
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+
+ARG VITE_API_URL
+ARG VITE_REQUEST_TIMEOUT_MS=15000
+ARG VITE_DEMO_MODE=false
+ARG VITE_REVERB_APP_KEY
+ARG VITE_REVERB_HOST
+ARG VITE_REVERB_PORT=443
+ARG VITE_REVERB_SCHEME=https
+
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_REQUEST_TIMEOUT_MS=$VITE_REQUEST_TIMEOUT_MS \
+    VITE_DEMO_MODE=$VITE_DEMO_MODE \
+    VITE_REVERB_APP_KEY=$VITE_REVERB_APP_KEY \
+    VITE_REVERB_HOST=$VITE_REVERB_HOST \
+    VITE_REVERB_PORT=$VITE_REVERB_PORT \
+    VITE_REVERB_SCHEME=$VITE_REVERB_SCHEME
+
+RUN npm run build
+
+FROM nginxinc/nginx-unprivileged:1.29-alpine
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080

@@ -1,0 +1,231 @@
+name: ${COMPOSE_PROJECT_NAME:-logistics-staging}
+
+x-backend: &backend-service
+  image: logistics-school-backend:staging
+  build:
+    context: ./backend-new
+    dockerfile: Dockerfile.staging
+  env_file:
+    - .env.staging
+  networks:
+    - internal
+  restart: unless-stopped
+  logging: &default-logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  mysql:
+    image: mysql:8.4
+    env_file:
+      - .env.staging
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-name-resolve
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --silent --host=127.0.0.1 --user=root --password=\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+
+  migrate:
+    <<: *backend-service
+    restart: "no"
+    command: ["php", "artisan", "migrate", "--force", "--no-interaction"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  backend:
+    <<: *backend-service
+    command: ["apache2-foreground"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+
+  queue:
+    <<: *backend-service
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--timeout=90", "--max-time=3600"]
+    stop_grace_period: 95s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan queue:monitor database:default --max=500 >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 384m
+    cpus: 0.75
+    pids_limit: 128
+
+  scheduler:
+    <<: *backend-service
+    command: ["php", "artisan", "schedule:work", "--no-interaction"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan schedule:list --no-ansi >/dev/null 2>&1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 20s
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+
+  reverb:
+    <<: *backend-service
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080", "--no-interaction"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$s=@fsockopen('127.0.0.1',8080,$$e,$$m,2);exit($$s?0:1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 256m
+    cpus: 0.75
+    pids_limit: 128
+
+  frontend:
+    image: logistics-school-frontend:staging
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.staging
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_REQUEST_TIMEOUT_MS: ${VITE_REQUEST_TIMEOUT_MS:-15000}
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-false}
+        VITE_REVERB_APP_KEY: ${REVERB_APP_KEY}
+        VITE_REVERB_HOST: ${VITE_REVERB_HOST}
+        VITE_REVERB_PORT: ${VITE_REVERB_PORT:-443}
+        VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-https}
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+
+  mailpit:
+    image: axllent/mailpit:v1.24.1
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 500
+    volumes:
+      - mailpit-data:/data
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+
+  reverse-proxy:
+    image: caddy:2.10.2-alpine
+    env_file:
+      - .env.staging
+    environment:
+      STAGING_FRONTEND_HOST: ${STAGING_FRONTEND_HOST:-logistics.local}
+      STAGING_API_HOST: ${STAGING_API_HOST:-api.logistics.local}
+      STAGING_MAIL_HOST: ${STAGING_MAIL_HOST:-mail.logistics.local}
+    ports:
+      - "127.0.0.1:${STAGING_HTTP_PORT:-80}:80"
+      - "127.0.0.1:${STAGING_HTTPS_PORT:-443}:443"
+    extra_hosts:
+      - "${STAGING_API_HOST:-api.logistics.local}:127.0.0.1"
+    volumes:
+      - ./docker/caddy/Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - ./.docker/tls:/etc/caddy/tls:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - public
+      - internal
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      reverb:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--no-check-certificate", "--spider", "https://api.logistics.local/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 128
+
+volumes:
+  mysql-data:
+  mailpit-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  public:
+  internal:
+    internal: true

@@ -1,0 +1,68 @@
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+		-Server
+	}
+}
+
+http://{$STAGING_FRONTEND_HOST} {
+	redir https://{$STAGING_FRONTEND_HOST}{uri} permanent
+}
+
+http://{$STAGING_API_HOST} {
+	redir https://{$STAGING_API_HOST}{uri} permanent
+}
+
+http://{$STAGING_MAIL_HOST} {
+	redir https://{$STAGING_MAIL_HOST}{uri} permanent
+}
+
+https://{$STAGING_FRONTEND_HOST} {
+	tls internal {
+		protocols tls1.2 tls1.3
+	}
+	import security_headers
+	header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://{$STAGING_API_HOST} wss://{$STAGING_API_HOST}"
+	reverse_proxy frontend:8080
+}
+
+https://{$STAGING_API_HOST} {
+	tls internal {
+		protocols tls1.2 tls1.3
+	}
+	import security_headers
+	request_body {
+		max_size 3MB
+	}
+
+	@reverb path /app/* /apps/*
+	reverse_proxy @reverb reverb:8080 {
+		header_up Host {host}
+		transport http {
+			read_timeout 24h
+			write_timeout 24h
+		}
+	}
+
+	reverse_proxy backend:8080 {
+		header_up Host {host}
+	}
+}
+
+https://{$STAGING_MAIL_HOST} {
+	tls internal {
+		protocols tls1.2 tls1.3
+	}
+	import security_headers
+	reverse_proxy mailpit:8025
+}

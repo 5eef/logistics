@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ColisController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MiscController;
 use App\Http\Controllers\PhoneVerificationController;
 use App\Http\Controllers\ProfileController;
@@ -11,6 +12,10 @@ use App\Http\Controllers\TravelerTripController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
+Route::get('/health', [HealthController::class, 'health']);
+// Keep readiness independent from the database-backed rate limiter so it can
+// report a controlled 503 during a database outage.
+Route::get('/health/ready', [HealthController::class, 'ready']);
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:register');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');

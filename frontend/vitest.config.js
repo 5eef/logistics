@@ -12,7 +12,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.js",
-    exclude: ["e2e/**", "node_modules/**", "dist/**"],
+    exclude: ["e2e/**", "e2e-staging/**", "node_modules/**", "dist/**"],
     coverage: { provider: "v8", reporter: ["text", "html"] },
   },
 });
